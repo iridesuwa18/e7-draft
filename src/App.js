@@ -1,6 +1,5 @@
 /* eslint-disable */
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import * as XLSX from "xlsx";
 
 /* ═══════════════════════════════════════════  CONSTANTS  ═══ */
 const SCHEMA_VERSION = 2;
@@ -75,82 +74,71 @@ function migrate(raw) {
 async function load() { try { const r=localStorage.getItem(STORAGE_KEY); if(r) return migrate(r); } catch {} return freshData(); }
 async function save(d) { try { localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); } catch {} }
 
-function exportXLSX(data) {
-  const wb=XLSX.utils.book_new();
-  const heroRows=data.heroes.map(h=>({
-    id:h.id, name:h.name, class:h.class, element:h.element,
-    image:h.image,
-    roles:        JSON.stringify(h.roles        ||[]),
-    buffs:        JSON.stringify(h.buffs        ||[]),
-    debuffs:      JSON.stringify(h.debuffs      ||[]),
-    strengths:    JSON.stringify(h.strengths    ||[]),
-    weaknesses:   JSON.stringify(h.weaknesses   ||[]),
-    counters:     JSON.stringify(h.counters     ||[]),
-    strongAgainst:JSON.stringify(h.strongAgainst||[]),
-    synergies:    JSON.stringify(h.synergies    ||[]),
-    note:h.note||"", createdAt:h.createdAt||Date.now()
-  }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(heroRows), "Heroes");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.buffs.map(t=>({...t}))), "Buffs");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.debuffs.map(t=>({...t}))), "Debuffs");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
-    data.strengths.map(s=>({...s, linkedBuffs:JSON.stringify(s.linkedBuffs||[]), linkedDebuffs:JSON.stringify(s.linkedDebuffs||[])}))
-  ), "Strengths");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
-    data.weaknesses.map(s=>({...s, linkedBuffs:JSON.stringify(s.linkedBuffs||[]), linkedDebuffs:JSON.stringify(s.linkedDebuffs||[])}))
-  ), "Weaknesses");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
-    version: SCHEMA_VERSION,
-    settings: JSON.stringify(data.settings||{classIcons:{},elementIcons:{}})
-  }]), "Meta");
-  // Use blob + anchor download for reliable cross-browser support
-  const wbout = XLSX.write(wb, { bookType:"xlsx", type:"array" });
-  const blob = new Blob([wbout], { type:"application/octet-stream" });
+// Compress image to given square size
+function compressImage(src, size=256, quality=0.85) {
+  return new Promise(resolve => {
+    if (!src || !src.startsWith("data:")) { resolve(src); return; }
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#000"; ctx.fillRect(0,0,size,size);
+      const s = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width-s)/2, (img.height-s)/2, s, s, 0, 0, size, size);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(src);
+    img.src = src;
+  });
+}
+
+// Export everything as a single JSON file
+// Heroes: 256x256, tags/settings icons: 64x64
+async function exportJSON(data) {
+  const heroes = await Promise.all(data.heroes.map(async h=>({
+    ...h, image: await compressImage(h.image, 256, 0.85)
+  })));
+  const buffs = await Promise.all((data.buffs||[]).map(async t=>({
+    ...t, icon: await compressImage(t.icon, 64, 0.8)
+  })));
+  const debuffs = await Promise.all((data.debuffs||[]).map(async t=>({
+    ...t, icon: await compressImage(t.icon, 64, 0.8)
+  })));
+  const strengths = await Promise.all((data.strengths||[]).map(async s=>({
+    ...s, icon: await compressImage(s.icon, 64, 0.8)
+  })));
+  const weaknesses = await Promise.all((data.weaknesses||[]).map(async s=>({
+    ...s, icon: await compressImage(s.icon, 64, 0.8)
+  })));
+  // Compress settings icons
+  const classIcons={}, elementIcons={};
+  for (const [k,v] of Object.entries(data.settings?.classIcons||{}))
+    classIcons[k] = await compressImage(v, 64, 0.8);
+  for (const [k,v] of Object.entries(data.settings?.elementIcons||{}))
+    elementIcons[k] = await compressImage(v, 64, 0.8);
+  const settings = { ...data.settings, classIcons, elementIcons };
+
+  const out = JSON.stringify({ version:SCHEMA_VERSION, heroes, buffs, debuffs, strengths, weaknesses, settings });
+  const blob = new Blob([out], { type:"application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = "e7_draft_data.xlsx";
+  a.href = url; a.download = "e7_draft_backup.json";
   a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
+  document.body.appendChild(a); a.click();
   setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
 }
-function importXLSX(file) {
-  return new Promise((res,rej)=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      try {
-        const wb=XLSX.read(e.target.result,{type:"array"});
-        const sh=n=>wb.Sheets[n]?XLSX.utils.sheet_to_json(wb.Sheets[n]):[];
-        const pj=v=>{try{return JSON.parse(v||"[]");}catch{return [];}};
-        const pjObj=v=>{try{return JSON.parse(v||"{}");}catch{return {};}};
 
-        const heroes=sh("Heroes").map(h=>({
-          id:h.id||uid(), name:h.name||"", class:h.class||"KN", element:h.element||"fire",
-          image:h.image||"",
-          roles:        pj(h.roles),
-          buffs:        pj(h.buffs),
-          debuffs:      pj(h.debuffs),
-          strengths:    pj(h.strengths),
-          weaknesses:   pj(h.weaknesses),
-          counters:     pj(h.counters),
-          strongAgainst:pj(h.strongAgainst),
-          synergies:    pj(h.synergies),
-          note:h.note||"", createdAt:h.createdAt||Date.now()
-        }));
-        const buffs   =sh("Buffs"   ).map(t=>({id:t.id||uid(),name:t.name||"",icon:t.icon||"",color:t.color||"#888888",createdAt:t.createdAt||Date.now()}));
-        const debuffs =sh("Debuffs" ).map(t=>({id:t.id||uid(),name:t.name||"",icon:t.icon||"",color:t.color||"#888888",createdAt:t.createdAt||Date.now()}));
-        const strengths =sh("Strengths" ).map(s=>({id:s.id||uid(),name:s.name||"",icon:s.icon||"",linkedBuffs:pj(s.linkedBuffs),linkedDebuffs:pj(s.linkedDebuffs),createdAt:s.createdAt||Date.now()}));
-        const weaknesses=sh("Weaknesses").map(s=>({id:s.id||uid(),name:s.name||"",icon:s.icon||"",linkedBuffs:pj(s.linkedBuffs),linkedDebuffs:pj(s.linkedDebuffs),createdAt:s.createdAt||Date.now()}));
-        const meta=sh("Meta")[0]||{};
-        const settings=pjObj(meta.settings);
-        if(!settings.classIcons)  settings.classIcons={};
-        if(!settings.elementIcons)settings.elementIcons={};
-        // Run through migrate() so any missing fields get defaults
-        res(migrate({version:SCHEMA_VERSION,heroes,buffs,debuffs,strengths,weaknesses,settings}));
-      } catch(err){rej(err);}
+// Import from JSON file
+function importJSON(file) {
+  return new Promise((res,rej)=>{
+    const reader = new FileReader();
+    reader.onload = e => {
+      try { res(migrate(e.target.result)); }
+      catch(err) { rej(err); }
     };
-    reader.readAsArrayBuffer(file);
+    reader.onerror = ()=>rej(new Error("Could not read file"));
+    reader.readAsText(file);
   });
 }
 
@@ -1096,19 +1084,30 @@ function TagsView({data,onUpdate}){
 function SettingsView({data,onUpdate,onImport}){
   const fileRef=useRef();
   const [importErr,setImportErr]=useState("");
+  const [exporting,setExporting]=useState(false);
   function setClassIcon(k,v){onUpdate({...data,settings:{...data.settings,classIcons:{...data.settings.classIcons,[k]:v}}});}
   function setElIcon(k,v){onUpdate({...data,settings:{...data.settings,elementIcons:{...data.settings.elementIcons,[k]:v}}});}
-  async function handleImport(e){const f=e.target.files[0];if(!f)return;try{const d=await importXLSX(f);onImport(d);setImportErr("");}catch(err){setImportErr("Failed: "+err.message);}e.target.value="";}
+  async function handleImport(e){
+    const f=e.target.files[0]; if(!f)return;
+    try{ const d=await importJSON(f); onImport(d); setImportErr(""); }
+    catch(err){ setImportErr("Failed: "+err.message); }
+    e.target.value="";
+  }
+  async function handleExport(){
+    setExporting(true);
+    try { await exportJSON(data); } catch(e){ console.error(e); }
+    setExporting(false);
+  }
   return(
     <div style={{height:"100%",overflowY:"auto",padding:"20px 24px"}}>
       <section style={{marginBottom:32}}>
         <div style={{fontFamily:"Cinzel,serif",fontSize:11,color:T.gold,letterSpacing:2,marginBottom:10}}>DATA EXPORT / IMPORT</div>
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:5,padding:"14px 16px",maxWidth:500}}>
-          <p style={{fontFamily:"'Crimson Text',serif",fontSize:13,color:T.sub,marginBottom:12,lineHeight:1.6}}>Export your complete data — heroes, tags, and icons — to an Excel file. Import to restore everything.</p>
+          <p style={{fontFamily:"'Crimson Text',serif",fontSize:13,color:T.sub,marginBottom:12,lineHeight:1.6}}>Export all your data — heroes, tags, and images — to a single JSON backup file. Import to restore everything on any device.</p>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <Btn variant="primary" onClick={()=>exportXLSX(data)}>Export to Excel</Btn>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={handleImport}/>
-            <Btn onClick={()=>fileRef.current.click()}>Import from Excel</Btn>
+            <Btn variant="primary" onClick={handleExport} disabled={exporting}>{exporting?"Preparing…":"Export Backup (JSON)"}</Btn>
+            <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={handleImport}/>
+            <Btn onClick={()=>fileRef.current.click()}>Import Backup (JSON)</Btn>
           </div>
           {importErr&&<div style={{marginTop:8,fontSize:12,color:"#c06060",fontFamily:"'Crimson Text',serif"}}>{importErr}</div>}
         </div>
