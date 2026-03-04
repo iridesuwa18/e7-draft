@@ -381,31 +381,6 @@ function Ico({src,size=32,fallback="?"}){
   return <span style={{...s,fontSize:Math.max(8,size*0.38),color:src?T.sub:T.dim,fontFamily:"Cinzel,serif",textAlign:"center",lineHeight:1}}>{src||fallback}</span>;
 }
 
-function ImagePicker({value,onChange}){
-  const [mode,setMode]=useState("url");
-  const [urlInput,setUrlInput]=useState("");
-  const [loading,setLoading]=useState(false);
-  const ref=useRef();
-  async function handleFile(e){const f=e.target.files[0];if(!f)return;setLoading(true);const r=new FileReader();r.onload=async ev=>{const c=await cropToSquare(ev.target.result,f.type==="image/png");onChange(c);setLoading(false);};r.readAsDataURL(f);e.target.value="";}
-  async function handleUrl(){if(!urlInput.trim())return;setLoading(true);try{const res=await fetch(urlInput);const blob=await res.blob();const r=new FileReader();r.onload=async ev=>{const c=await cropToSquare(ev.target.result,blob.type==="image/png");onChange(c);setLoading(false);};r.readAsDataURL(blob);}catch{onChange(urlInput);setLoading(false);}}
-  return(
-    <div>
-      <div style={{display:"flex",gap:4,marginBottom:6}}>
-        <Ico src={value} size={36} fallback="—"/>
-        <div style={{display:"flex",gap:3,alignItems:"center"}}>
-          {[["url","URL"],["file","File"],["text","Text"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setMode(v)} className="hov" style={{background:mode===v?T.gold:T.card,border:"none",color:mode===v?T.bg:T.sub,padding:"3px 9px",borderRadius:2,fontSize:10,fontFamily:"Cinzel,serif"}}>{l}</button>
-          ))}
-          {value&&<button onClick={()=>onChange("")} className="hov" style={{background:"none",border:`1px solid ${T.border}`,color:T.sub,padding:"2px 7px",borderRadius:2,fontSize:10}}>Clear</button>}
-        </div>
-      </div>
-      {mode==="url"&&<div style={{display:"flex",gap:4}}><input value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder="https://…" style={{...INP,flex:1}}/><Btn onClick={handleUrl} variant="primary">{loading?"…":"Load"}</Btn></div>}
-      {mode==="text"&&<input value={value&&!value.startsWith("data:")&&!value.startsWith("http")?value:""} onChange={e=>onChange(e.target.value)} placeholder="Short label…" style={INP}/>}
-      {mode==="file"&&<><input ref={ref} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/><button onClick={()=>ref.current.click()} className="hov" style={{background:T.card,border:`1px solid ${T.border}`,color:T.sub,padding:"6px 14px",borderRadius:3,fontSize:12}}>{loading?"Processing…":"Choose image…"}</button></>}
-    </div>
-  );
-}
-
 function Modal({title,onClose,children,width=580,maxH="88vh"}){
   return(
     <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"#000c",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}}>
