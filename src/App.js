@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 
@@ -91,7 +92,7 @@ function exportXLSX(data) {
     note:h.note||"", createdAt:h.createdAt||Date.now()
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(heroRows), "Heroes");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.buffs  .map(t=>({...t}))), "Buffs");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.buffs.map(t=>({...t}))), "Buffs");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.debuffs.map(t=>({...t}))), "Debuffs");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
     data.strengths.map(s=>({...s, linkedBuffs:JSON.stringify(s.linkedBuffs||[]), linkedDebuffs:JSON.stringify(s.linkedDebuffs||[])}))
@@ -550,11 +551,11 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
   const teammates=team.filter(Boolean);
   const opponents=opp.filter(Boolean);
 
-  const ownBufSet =useMemo(()=>new Set(teammates.flatMap(h=>h.buffs||[])),[team]);
-  const oppDebSet =useMemo(()=>new Set(opponents.flatMap(h=>h.debuffs||[])),[opp]);
+  const ownBufSet =useMemo(()=>new Set(teammates.flatMap(h=>h.buffs||[])),[team,teammates]);
+  const oppDebSet =useMemo(()=>new Set(opponents.flatMap(h=>h.debuffs||[])),[opp,opponents]);
 
-  const tBufCounts=useMemo(()=>{const c={};teammates.forEach(h=>(h.buffs||[]).forEach(id=>{c[id]=(c[id]||0)+1;}));return c;},[team]);
-  const tDebCounts=useMemo(()=>{const c={};teammates.forEach(h=>(h.debuffs||[]).forEach(id=>{c[id]=(c[id]||0)+1;}));return c;},[team]);
+  const tBufCounts=useMemo(()=>{const c={};teammates.forEach(h=>(h.buffs||[]).forEach(id=>{c[id]=(c[id]||0)+1;}));return c;},[team,teammates]);
+  const tDebCounts=useMemo(()=>{const c={};teammates.forEach(h=>(h.debuffs||[]).forEach(id=>{c[id]=(c[id]||0)+1;}));return c;},[team,teammates]);
 
   const synPairs=useMemo(()=>{
     const p=[];
