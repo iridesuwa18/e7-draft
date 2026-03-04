@@ -110,10 +110,10 @@ function exportXLSX(data) {
   const a = document.createElement("a");
   a.href = url;
   a.download = "e7_draft_data.xlsx";
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
 }
 function importXLSX(file) {
   return new Promise((res,rej)=>{
