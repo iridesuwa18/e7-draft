@@ -151,21 +151,206 @@ const sorted=(arr,s)=>[...arr].sort((a,b)=>s==="az"?(a.name||"").localeCompare(b
 function clsIcon(cls,settings){const ico=settings?.classIcons?.[cls];if(ico)return ico;const label=CL_META[cls]?.label||cls;return label.split(" ").map(w=>w[0]).join("");}
 function elIcon(el,settings){const ico=settings?.elementIcons?.[el];if(ico)return ico;return(EL_META[el]?.label||el)[0];}
 function elColor(el){return EL_META[el]?.color||"#666";}
-function cropToSquare(src,isPng){
-  return new Promise(resolve=>{
-    const img=new Image();
-    img.onload=()=>{
-      const size=Math.min(img.width,img.height);
-      const canvas=document.createElement("canvas");
-      canvas.width=size;canvas.height=size;
-      const ctx=canvas.getContext("2d");
-      if(isPng){ctx.fillStyle="#000";ctx.fillRect(0,0,size,size);}
-      ctx.drawImage(img,(img.width-size)/2,(img.height-size)/2,size,size,0,0,size,size);
-      resolve(canvas.toDataURL("image/jpeg",0.92));
-    };
-    img.onerror=()=>resolve(src);
-    img.src=src;
-  });
+// Render the visible crop area to a square JPEG at OUTPUT_SIZE px
+const OUTPUT_SIZE = 256;
+function renderCrop(imgEl, offsetX, offsetY, scale) {
+  const canvas = document.createElement("canvas");
+  canvas.width = OUTPUT_SIZE; canvas.height = OUTPUT_SIZE;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+  // offsetX/Y are the pixel coords of the image centre relative to the crop-box centre
+  const drawW = imgEl.naturalWidth  * scale;
+  const drawH = imgEl.naturalHeight * scale;
+  const dx = OUTPUT_SIZE / 2 - drawW / 2 + offsetX;
+  const dy = OUTPUT_SIZE / 2 - drawH / 2 + offsetY;
+  ctx.drawImage(imgEl, dx, dy, drawW, drawH);
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+/* ═══ IMAGE CROP EDITOR MODAL ═══ */
+function ImageCropModal({ src, onSave, onClose }) {
+  const BOX = 280; // preview box px (display)
+  const imgRef   = useRef();
+  const [ready,  setReady]  = useState(false);
+  const [scale,  setScale]  = useState(1);
+  const [offset, setOffset] = useState({ x:0, y:0 });
+  const drag = useRef(null);
+
+  // Fit image into box on load
+  function onImgLoad() {
+    const img = imgRef.current;
+    const fit = Math.min(BOX / img.naturalWidth, BOX / img.naturalHeight);
+    setScale(fit);
+    setOffset({ x:0, y:0 });
+    setReady(true);
+  }
+
+  // ── Mouse drag ──
+  function onMouseDown(e) {
+    e.preventDefault();
+    drag.current = { startX: e.clientX - offset.x, startY: e.clientY - offset.y, touch: false };
+  }
+  function onMouseMove(e) {
+    if (!drag.current || drag.current.touch) return;
+    setOffset({ x: e.clientX - drag.current.startX, y: e.clientY - drag.current.startY });
+  }
+  function onMouseUp() { drag.current = null; }
+
+  // ── Touch drag ──
+  function onTouchStart(e) {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      drag.current = { startX: t.clientX - offset.x, startY: t.clientY - offset.y, touch: true, lastDist: null };
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      drag.current = { ...drag.current, touch: true, lastDist: Math.hypot(dx, dy) };
+    }
+  }
+  function onTouchMove(e) {
+    e.preventDefault();
+    if (e.touches.length === 1 && drag.current) {
+      const t = e.touches[0];
+      setOffset({ x: t.clientX - drag.current.startX, y: t.clientY - drag.current.startY });
+    } else if (e.touches.length === 2 && drag.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (drag.current.lastDist) {
+        const delta = dist / drag.current.lastDist;
+        setScale(s => Math.max(0.1, Math.min(10, s * delta)));
+      }
+      drag.current.lastDist = dist;
+    }
+  }
+  function onTouchEnd() { if (drag.current) drag.current.lastDist = null; }
+
+  // ── Scroll to zoom ──
+  function onWheel(e) {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.08 : 0.93;
+    setScale(s => Math.max(0.1, Math.min(10, s * factor)));
+  }
+
+  function handleSave() {
+    const cropped = renderCrop(imgRef.current, offset.x, offset.y, scale);
+    onSave(cropped);
+  }
+
+  const imgW = imgRef.current ? imgRef.current.naturalWidth  * scale : 0;
+  const imgH = imgRef.current ? imgRef.current.naturalHeight * scale : 0;
+
+  return (
+    <div onClick={e=>e.target===e.currentTarget&&onClose()}
+      style={{position:"fixed",inset:0,background:"#000d",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000}}>
+      <div style={{background:T.panel,border:`1px solid ${T.border}`,borderRadius:6,padding:"20px 22px",width:340,maxWidth:"96vw"}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,paddingBottom:10,borderBottom:`1px solid ${T.border}`}}>
+          <span style={{fontFamily:"Cinzel,serif",color:T.gold,fontSize:11,letterSpacing:2}}>CROP IMAGE</span>
+          <button onClick={onClose} className="hov" style={{background:"none",border:"none",color:T.sub,fontSize:16,lineHeight:1}}>×</button>
+        </div>
+
+        <div style={{fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",marginBottom:10,textAlign:"center"}}>
+          Drag to reposition · Scroll or pinch to zoom
+        </div>
+
+        {/* Crop box */}
+        <div style={{position:"relative",width:BOX,height:BOX,margin:"0 auto 14px",borderRadius:4,overflow:"hidden",background:"#000",cursor:"grab",border:`2px solid ${T.gold}`,userSelect:"none",touchAction:"none"}}
+          onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+          onWheel={onWheel}>
+          {/* Hidden img used for rendering */}
+          <img ref={imgRef} src={src} alt="" onLoad={onImgLoad} crossOrigin="anonymous"
+            style={{position:"absolute",
+              left: BOX/2 - imgW/2 + offset.x,
+              top:  BOX/2 - imgH/2 + offset.y,
+              width: imgW, height: imgH,
+              display: ready ? "block" : "none",
+              pointerEvents:"none", userSelect:"none"}}/>
+          {/* Crosshair overlay */}
+          <div style={{position:"absolute",inset:0,pointerEvents:"none",
+            boxShadow:`inset 0 0 0 1px ${T.gold}44`}}>
+            <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:1,background:T.gold+"33"}}/>
+            <div style={{position:"absolute",top:"50%",left:0,right:0,height:1,background:T.gold+"33"}}/>
+          </div>
+          {!ready&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:T.dim,fontFamily:"Cinzel,serif",fontSize:11}}>Loading…</div>}
+        </div>
+
+        {/* Zoom slider */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <span style={{fontSize:10,color:T.dim,fontFamily:"Cinzel,serif",flexShrink:0}}>ZOOM</span>
+          <input type="range" min="10" max="500" step="1"
+            value={Math.round(scale*100)}
+            onChange={e=>setScale(Number(e.target.value)/100)}
+            style={{flex:1,accentColor:T.gold}}/>
+          <span style={{fontSize:10,color:T.sub,fontFamily:"Cinzel,serif",flexShrink:0,minWidth:36,textAlign:"right"}}>{Math.round(scale*100)}%</span>
+        </div>
+
+        {/* Buttons */}
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <Btn onClick={onClose}>Cancel</Btn>
+          <Btn variant="primary" onClick={handleSave}>Use This Crop</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImagePicker({value,onChange}){
+  const [mode,setMode]=useState("url");
+  const [urlInput,setUrlInput]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [cropSrc,setCropSrc]=useState(null); // raw src waiting to be cropped
+  const fileRef=useRef();
+
+  async function handleFile(e){
+    const f=e.target.files[0];if(!f)return;
+    setLoading(true);
+    const r=new FileReader();
+    r.onload=ev=>{setCropSrc(ev.target.result);setLoading(false);};
+    r.readAsDataURL(f);
+    e.target.value="";
+  }
+
+  async function handleUrl(){
+    if(!urlInput.trim())return;
+    setLoading(true);
+    try{
+      const res=await fetch(urlInput);
+      const blob=await res.blob();
+      const r=new FileReader();
+      r.onload=ev=>{setCropSrc(ev.target.result);setLoading(false);};
+      r.readAsDataURL(blob);
+    }catch{
+      // If CORS blocks fetch, just open the URL directly in the editor
+      setCropSrc(urlInput);
+      setLoading(false);
+    }
+  }
+
+  function handleCropSave(cropped){
+    onChange(cropped);
+    setCropSrc(null);
+  }
+
+  return(
+    <div>
+      <div style={{display:"flex",gap:4,marginBottom:6}}>
+        <Ico src={value} size={36} fallback="—"/>
+        <div style={{display:"flex",gap:3,alignItems:"center"}}>
+          {[["url","URL"],["file","File"],["text","Text"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setMode(v)} className="hov" style={{background:mode===v?T.gold:T.card,border:"none",color:mode===v?T.bg:T.sub,padding:"3px 9px",borderRadius:2,fontSize:10,fontFamily:"Cinzel,serif"}}>{l}</button>
+          ))}
+          {value&&<button onClick={()=>onChange("")} className="hov" style={{background:"none",border:`1px solid ${T.border}`,color:T.sub,padding:"2px 7px",borderRadius:2,fontSize:10}}>Clear</button>}
+          {value&&<button onClick={()=>setCropSrc(value)} className="hov" style={{background:"none",border:`1px solid ${T.goldDim}`,color:T.gold,padding:"2px 7px",borderRadius:2,fontSize:10}}>Edit</button>}
+        </div>
+      </div>
+      {mode==="url"&&<div style={{display:"flex",gap:4}}><input value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder="https://…" style={{...INP,flex:1}}/><Btn onClick={handleUrl} variant="primary">{loading?"…":"Load"}</Btn></div>}
+      {mode==="text"&&<input value={value&&!value.startsWith("data:")&&!value.startsWith("http")?value:""} onChange={e=>onChange(e.target.value)} placeholder="Short label…" style={INP}/>}
+      {mode==="file"&&<><input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/><button onClick={()=>fileRef.current.click()} className="hov" style={{background:T.card,border:`1px solid ${T.border}`,color:T.sub,padding:"6px 14px",borderRadius:3,fontSize:12}}>{loading?"Processing…":"Choose image…"}</button></>}
+      {cropSrc&&<ImageCropModal src={cropSrc} onSave={handleCropSave} onClose={()=>setCropSrc(null)}/>}
+    </div>
+  );
 }
 
 /* ═══ THEME ═══ */
