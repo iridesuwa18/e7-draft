@@ -77,10 +77,9 @@ async function save(d) { try { localStorage.setItem(STORAGE_KEY,JSON.stringify(d
 
 function exportXLSX(data) {
   const wb=XLSX.utils.book_new();
-  // Heroes — all fields, arrays as JSON strings
   const heroRows=data.heroes.map(h=>({
     id:h.id, name:h.name, class:h.class, element:h.element,
-    image:h.image,                          // base64 or url
+    image:h.image,
     roles:        JSON.stringify(h.roles        ||[]),
     buffs:        JSON.stringify(h.buffs        ||[]),
     debuffs:      JSON.stringify(h.debuffs      ||[]),
@@ -100,12 +99,21 @@ function exportXLSX(data) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
     data.weaknesses.map(s=>({...s, linkedBuffs:JSON.stringify(s.linkedBuffs||[]), linkedDebuffs:JSON.stringify(s.linkedDebuffs||[])}))
   ), "Weaknesses");
-  // Meta sheet — version + full settings JSON
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
     version: SCHEMA_VERSION,
     settings: JSON.stringify(data.settings||{classIcons:{},elementIcons:{}})
   }]), "Meta");
-  XLSX.writeFile(wb, "e7_draft_data.xlsx");
+  // Use blob + anchor download for reliable cross-browser support
+  const wbout = XLSX.write(wb, { bookType:"xlsx", type:"array" });
+  const blob = new Blob([wbout], { type:"application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "e7_draft_data.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 function importXLSX(file) {
   return new Promise((res,rej)=>{
@@ -945,13 +953,24 @@ function AEmpty(){return <span style={{fontSize:9,color:T.dim,fontStyle:"italic"
 function Slot({idx,hero,team,isActiveTeam,active,setActive,onRemove,highlight,settings}){
   const isActive=isActiveTeam&&active.idx===idx;
   const gc=highlight==="both"?"both-glow":highlight==="syn"?"syn-glow":highlight==="ctr"?"ctr-glow":isActive?"active-slot":"";
+  const hasImg=hero?.image&&(hero.image.startsWith("data:")||hero.image.startsWith("http")||hero.image.startsWith("blob:"));
   return(
-    <div onClick={()=>setActive({team,idx})} className={gc} style={{aspectRatio:"1",background:hero?T.card:T.bg,border:`1px solid ${hero?T.border:T.dim}`,borderRadius:4,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"6px 3px 4px",cursor:"pointer",position:"relative",transition:"box-shadow 0.15s,border-color 0.15s",overflow:"hidden"}}>
-      {hero&&<button onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onRemove(team,idx);}} style={{position:"absolute",top:2,right:3,background:"none",border:"none",color:T.dim,fontSize:10,cursor:"pointer",lineHeight:1,padding:0}}>×</button>}
+    <div onClick={()=>setActive({team,idx})} className={gc} style={{aspectRatio:"1",background:hero?T.card:T.bg,border:`1px solid ${hero?T.border:T.dim}`,borderRadius:4,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative",transition:"box-shadow 0.15s,border-color 0.15s",overflow:"hidden"}}>
+      {hero&&<button onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onRemove(team,idx);}} style={{position:"absolute",top:2,right:3,background:"none",border:"none",color:"#ffffff99",fontSize:11,cursor:"pointer",lineHeight:1,padding:0,zIndex:2}}>×</button>}
       {hero?(
         <>
-          <Ico src={hero.image} size={44} fallback={clsIcon(hero.class,settings)}/>
-          <div style={{fontFamily:"Cinzel,serif",fontSize:8,color:T.text,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%",paddingTop:1}}>{hero.name||<span style={{color:T.dim}}>—</span>}</div>
+          {hasImg
+            ? <img src={hero.image} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover"}}/>
+            : <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <span style={{fontSize:hero.image?22:28,color:T.sub,fontFamily:"Cinzel,serif",textAlign:"center",padding:"0 4px",wordBreak:"break-all",lineHeight:1.2}}>
+                  {hero.image || clsIcon(hero.class,settings)}
+                </span>
+              </div>
+          }
+          {/* Name bar at bottom */}
+          <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,#000000cc)",padding:"10px 3px 3px",zIndex:1}}>
+            <div style={{fontFamily:"Cinzel,serif",fontSize:8,color:"#fff",textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{hero.name||<span style={{color:"#ffffff66"}}>—</span>}</div>
+          </div>
         </>
       ):(
         <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
