@@ -292,14 +292,24 @@ function ImageCropModal({ src, onSave, onClose }) {
   );
 }
 
-function ImagePicker({value,onChange}){
+function ImagePicker({value,onChange,allImages=[]}){
   const [mode,setMode]=useState("url");
   const [urlInput,setUrlInput]=useState("");
   const [loading,setLoading]=useState(false);
   const [cropSrc,setCropSrc]=useState(null);
   const [pasteHint,setPasteHint]=useState("");
+  const [libSearch,setLibSearch]=useState("");
   const fileRef=useRef();
   const pasteRef=useRef();
+
+  // Deduplicated library of all existing images
+  const library=useMemo(()=>{
+    const seen=new Set();
+    return allImages.filter(src=>{
+      if(!src||seen.has(src))return false;
+      seen.add(src);return true;
+    });
+  },[allImages]);
 
   async function handleFile(e){
     const f=e.target.files[0];if(!f)return;
@@ -341,7 +351,6 @@ function ImagePicker({value,onChange}){
       }
       setPasteHint("No image found in clipboard.");
     }catch{
-      // Fallback — focus a hidden div and let the user Ctrl+V
       pasteRef.current?.focus();
       setPasteHint("Press Ctrl+V (or long-press Paste on mobile) now…");
     }
@@ -357,18 +366,24 @@ function ImagePicker({value,onChange}){
     r.readAsDataURL(blob);
   }
 
-  function handleCropSave(cropped){
-    onChange(cropped);
-    setCropSrc(null);
-  }
+  function handleCropSave(cropped){ onChange(cropped); setCropSrc(null); }
+
+  const filteredLib=library.filter(src=>{
+    if(!libSearch)return true;
+    // filter by url substring for http images, or just show all base64
+    return src.startsWith("http")&&src.toLowerCase().includes(libSearch.toLowerCase());
+  });
+
+  const TABS=[["url","URL"],["file","File"],["paste","Paste"],["library",`📁 ${library.length}`],["text","Text"]];
 
   return(
     <div>
       <div style={{display:"flex",gap:4,marginBottom:6}}>
         <Ico src={value} size={36} fallback="—"/>
         <div style={{display:"flex",gap:3,alignItems:"center",flexWrap:"wrap"}}>
-          {[["url","URL"],["file","File"],["paste","Paste"],["text","Text"]].map(([v,l])=>(
-            <button key={v} onClick={()=>{setMode(v);setPasteHint("");}} className="hov" style={{background:mode===v?T.gold:T.card,border:"none",color:mode===v?T.bg:T.sub,padding:"3px 9px",borderRadius:2,fontSize:10,fontFamily:"Cinzel,serif"}}>{l}</button>
+          {TABS.map(([v,l])=>(
+            <button key={v} onClick={()=>{setMode(v);setPasteHint("");setLibSearch("");}} className="hov"
+              style={{background:mode===v?T.gold:T.card,border:"none",color:mode===v?T.bg:T.sub,padding:"3px 9px",borderRadius:2,fontSize:10,fontFamily:"Cinzel,serif"}}>{l}</button>
           ))}
           {value&&<button onClick={()=>onChange("")} className="hov" style={{background:"none",border:`1px solid ${T.border}`,color:T.sub,padding:"2px 7px",borderRadius:2,fontSize:10}}>Clear</button>}
           {value&&<button onClick={()=>setCropSrc(value)} className="hov" style={{background:"none",border:`1px solid ${T.goldDim}`,color:T.gold,padding:"2px 7px",borderRadius:2,fontSize:10}}>Edit</button>}
@@ -379,7 +394,6 @@ function ImagePicker({value,onChange}){
       {mode==="file"&&<><input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/><button onClick={()=>fileRef.current.click()} className="hov" style={{background:T.card,border:`1px solid ${T.border}`,color:T.sub,padding:"6px 14px",borderRadius:3,fontSize:12}}>{loading?"Processing…":"Choose image…"}</button></>}
       {mode==="paste"&&(
         <div>
-          {/* Hidden focusable div to catch Ctrl+V */}
           <div ref={pasteRef} tabIndex={0} onPaste={handlePasteEvent}
             style={{position:"absolute",opacity:0,pointerEvents:"none",width:1,height:1}}/>
           <div onPaste={handlePasteEvent}
@@ -390,6 +404,25 @@ function ImagePicker({value,onChange}){
             <div style={{fontFamily:"'Crimson Text',serif",fontSize:11,color:T.dim,marginTop:3}}>or copy an image then press Ctrl+V anywhere here</div>
           </div>
           {pasteHint&&<div style={{fontSize:11,color:T.gold,fontFamily:"'Crimson Text',serif",marginTop:6,textAlign:"center"}}>{pasteHint}</div>}
+        </div>
+      )}
+      {mode==="library"&&(
+        <div>
+          {library.length===0
+            ? <div style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",padding:"8px 0"}}>No images in library yet — add some heroes or tags with images first.</div>
+            : <>
+                <input value={libSearch} onChange={e=>setLibSearch(e.target.value)} placeholder="Filter by URL…" style={{...INP,fontSize:11,marginBottom:8}}/>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(52px,1fr))",gap:5,maxHeight:180,overflowY:"auto"}}>
+                  {filteredLib.map((src,i)=>(
+                    <div key={i} onClick={()=>onChange(src)}
+                      style={{cursor:"pointer",borderRadius:3,overflow:"hidden",border:`2px solid ${src===value?T.gold:T.border}`,aspectRatio:"1",background:"#000",transition:"border-color 0.1s"}}>
+                      <img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                    </div>
+                  ))}
+                </div>
+                <div style={{fontSize:10,color:T.dim,fontFamily:"'Crimson Text',serif",marginTop:5}}>{filteredLib.length} image{filteredLib.length!==1?"s":""} in library — click to reuse</div>
+              </>
+          }
         </div>
       )}
       {cropSrc&&<ImageCropModal src={cropSrc} onSave={handleCropSave} onClose={()=>setCropSrc(null)}/>}
@@ -544,13 +577,23 @@ function HeroModal({hero,data,onSave,onClose}){
   const [picker,setPicker]=useState(null);
   const tog=(field,val)=>setF(x=>({...x,[field]:x[field].includes(val)?x[field].filter(v=>v!==val):[...x[field],val]}));
   const others=data.heroes.filter(h=>h.id!==f.id);
+  // Collect all images across entire data for the library
+  const allImages=useMemo(()=>[
+    ...data.heroes.map(h=>h.image),
+    ...data.buffs.map(t=>t.icon),
+    ...data.debuffs.map(t=>t.icon),
+    ...data.strengths.map(t=>t.icon),
+    ...data.weaknesses.map(t=>t.icon),
+    ...Object.values(data.settings?.classIcons||{}),
+    ...Object.values(data.settings?.elementIcons||{}),
+  ].filter(Boolean),[data]);
   return(
     <Modal title={f.id&&data.heroes.some(h=>h.id===f.id)?"Edit Hero":"Add Hero"} onClose={onClose} width={680} maxH="92vh">
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         <div style={{flex:1}}><Field label="NAME"><input value={f.name} onChange={e=>setF(x=>({...x,name:e.target.value}))} placeholder="Hero name…" style={INP} autoFocus/></Field></div>
         <div style={{flex:1}}><Field label="NOTE"><input value={f.note} onChange={e=>setF(x=>({...x,note:e.target.value}))} placeholder="Short note…" style={INP}/></Field></div>
       </div>
-      <Field label="PROFILE IMAGE"><ImagePicker value={f.image} onChange={v=>setF(x=>({...x,image:v}))}/></Field>
+      <Field label="PROFILE IMAGE"><ImagePicker value={f.image} onChange={v=>setF(x=>({...x,image:v}))} allImages={allImages}/></Field>
       <div style={{display:"flex",gap:12,marginTop:10}}>
         <Field label="CLASS" half>
           <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
@@ -638,10 +681,19 @@ function TagModal({type,tag,data,onSave,onClose}){
   const isStrWk=type==="strengths"||type==="weaknesses";
   const [f,setF]=useState({...tag,linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])]});
   const togL=(field,id)=>setF(x=>({...x,[field]:x[field].includes(id)?x[field].filter(v=>v!==id):[...x[field],id]}));
+  const allImages=useMemo(()=>[
+    ...data.heroes.map(h=>h.image),
+    ...data.buffs.map(t=>t.icon),
+    ...data.debuffs.map(t=>t.icon),
+    ...data.strengths.map(t=>t.icon),
+    ...data.weaknesses.map(t=>t.icon),
+    ...Object.values(data.settings?.classIcons||{}),
+    ...Object.values(data.settings?.elementIcons||{}),
+  ].filter(Boolean),[data]);
   return(
     <Modal title={`${tag.id?"Edit":"New"} ${type.slice(0,-1)}`} onClose={onClose} width={500}>
       <Field label="NAME"><input value={f.name} onChange={e=>setF(x=>({...x,name:e.target.value}))} placeholder="Tag name…" style={INP} autoFocus/></Field>
-      <Field label="ICON / IMAGE"><ImagePicker value={f.icon} onChange={v=>setF(x=>({...x,icon:v}))}/></Field>
+      <Field label="ICON / IMAGE"><ImagePicker value={f.icon} onChange={v=>setF(x=>({...x,icon:v}))} allImages={allImages}/></Field>
       {!isStrWk&&<Field label="COLOR"><div style={{display:"flex",gap:8,alignItems:"center"}}><input type="color" value={f.color||"#888888"} onChange={e=>setF(x=>({...x,color:e.target.value}))} style={{width:36,height:28,border:"none",background:"none",cursor:"pointer",padding:0}}/><span style={{fontSize:13,color:f.color,fontFamily:"'Crimson Text',serif"}}>{f.name||"preview"}</span></div></Field>}
       {isStrWk&&(
         <>
@@ -1026,6 +1078,7 @@ function HeroesView({data,onUpdate}){
   const list=useMemo(()=>sorted(data.heroes.filter(h=>!search||(h.name||"").toLowerCase().includes(search.toLowerCase())),sort),[data.heroes,sort,search]);
   function saveHero(hero){const exists=data.heroes.some(h=>h.id===hero.id);const heroes=exists?data.heroes.map(h=>h.id===hero.id?hero:h):[...data.heroes,{...hero,id:uid(),createdAt:Date.now()}];onUpdate({...data,heroes});setEdit(null);}
   function doDelete(id){onUpdate({...data,heroes:data.heroes.filter(h=>h.id!==id)});setDelConf(null);}
+  function doDuplicate(hero){const copy={...hero,id:uid(),name:(hero.name||"Unnamed")+" (Copy)",createdAt:Date.now(),roles:[...hero.roles],buffs:[...hero.buffs],debuffs:[...hero.debuffs],strengths:[...(hero.strengths||[])],weaknesses:[...(hero.weaknesses||[])],counters:[...(hero.counters||[])],strongAgainst:[...(hero.strongAgainst||[])],synergies:[...(hero.synergies||[])]};onUpdate({...data,heroes:[...data.heroes,copy]});}
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
       <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:8,alignItems:"center",flexShrink:0,flexWrap:"wrap"}}>
@@ -1050,6 +1103,7 @@ function HeroesView({data,onUpdate}){
             {hero.debuffs.length>0&&<div style={{display:"flex",gap:2,flexWrap:"wrap",marginBottom:4}}>{hero.debuffs.map(id=>{const d=data.debuffs.find(x=>x.id===id);return d&&<span key={id} style={{fontSize:9,padding:"1px 4px",borderRadius:2,background:d.color+"22",color:d.color,fontFamily:"'Crimson Text',serif"}}>{d.name}</span>;})}</div>}
             <div style={{display:"flex",gap:5,marginTop:6}}>
               <Btn onClick={()=>setEdit({...hero})}>Edit</Btn>
+              <Btn onClick={()=>doDuplicate(hero)}>Dupe</Btn>
               {delConf===hero.id
                 ?<><Btn variant="danger" onClick={()=>doDelete(hero.id)}>Confirm</Btn><Btn onClick={()=>setDelConf(null)}>Cancel</Btn></>
                 :<Btn variant="danger" onClick={e=>{e.stopPropagation();setDelConf(hero.id);}}>Delete</Btn>
@@ -1072,6 +1126,7 @@ function TagsView({data,onUpdate}){
   const [searches,setSearches]=useState({buffs:"",debuffs:"",strengths:"",weaknesses:""});
   function saveTag(type,tag){const arr=[...data[type]];const idx=arr.findIndex(t=>t.id===tag.id);if(idx>=0)arr[idx]=tag;else arr.push({...tag,id:uid(),createdAt:Date.now()});onUpdate({...data,[type]:arr});setEdit(null);}
   function doDelete(type,id){onUpdate({...data,[type]:data[type].filter(t=>t.id!==id)});setDelConf(null);}
+  function doDuplicate(type,tag){const copy={...tag,id:uid(),name:(tag.name||"Unnamed")+" (Copy)",createdAt:Date.now(),linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])],};onUpdate({...data,[type]:[...data[type],copy]});}
   const SECS=[
     {key:"buffs",    label:"BUFFS",     color:"#208888",desc:"Buffs heroes can provide to allies"},
     {key:"debuffs",  label:"DEBUFFS",   color:"#a82860",desc:"Debuffs heroes can apply to enemies"},
@@ -1111,6 +1166,7 @@ function TagsView({data,onUpdate}){
                   </div>
                   <div style={{display:"flex",gap:4,flexShrink:0}}>
                     <Btn onClick={()=>setEdit({type:key,tag:{...tag,linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])]}})}>Edit</Btn>
+                    <Btn onClick={()=>doDuplicate(key,tag)}>Dupe</Btn>
                     {delConf===tag.id
                       ?<><Btn variant="danger" onClick={()=>doDelete(key,tag.id)}>Confirm</Btn><Btn onClick={()=>setDelConf(null)}>Cancel</Btn></>
                       :<Btn variant="danger" onClick={()=>setDelConf(tag.id)}>Delete</Btn>
@@ -1133,6 +1189,15 @@ function SettingsView({data,onUpdate,onImport}){
   const fileRef=useRef();
   const [importErr,setImportErr]=useState("");
   const [exporting,setExporting]=useState(false);
+  const allImages=useMemo(()=>[
+    ...data.heroes.map(h=>h.image),
+    ...data.buffs.map(t=>t.icon),
+    ...data.debuffs.map(t=>t.icon),
+    ...data.strengths.map(t=>t.icon),
+    ...data.weaknesses.map(t=>t.icon),
+    ...Object.values(data.settings?.classIcons||{}),
+    ...Object.values(data.settings?.elementIcons||{}),
+  ].filter(Boolean),[data]);
   function setClassIcon(k,v){onUpdate({...data,settings:{...data.settings,classIcons:{...data.settings.classIcons,[k]:v}}});}
   function setElIcon(k,v){onUpdate({...data,settings:{...data.settings,elementIcons:{...data.settings.elementIcons,[k]:v}}});}
   async function handleImport(e){
@@ -1169,7 +1234,7 @@ function SettingsView({data,onUpdate,onImport}){
               <div style={{fontFamily:"Cinzel,serif",fontSize:10,color:T.sub,letterSpacing:1,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
                 <Ico src={data.settings.classIcons?.[k]||""} size={16} fallback={clsIcon(k,data.settings)}/>{v.label}
               </div>
-              <ImagePicker value={data.settings.classIcons?.[k]||""} onChange={val=>setClassIcon(k,val)}/>
+              <ImagePicker value={data.settings.classIcons?.[k]||""} onChange={val=>setClassIcon(k,val)} allImages={allImages}/>
             </div>
           ))}
         </div>
@@ -1183,7 +1248,7 @@ function SettingsView({data,onUpdate,onImport}){
               <div style={{fontFamily:"Cinzel,serif",fontSize:10,color:v.color,letterSpacing:1,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
                 <Ico src={data.settings.elementIcons?.[k]||""} size={16} fallback={elIcon(k,data.settings)}/>{v.label}
               </div>
-              <ImagePicker value={data.settings.elementIcons?.[k]||""} onChange={val=>setElIcon(k,val)}/>
+              <ImagePicker value={data.settings.elementIcons?.[k]||""} onChange={val=>setElIcon(k,val)} allImages={allImages}/>
             </div>
           ))}
         </div>
