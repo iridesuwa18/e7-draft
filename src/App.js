@@ -17,7 +17,8 @@ const CL_META = {
   MG:{ label:"Mage"   }, RG:{ label:"Ranger"  },
   SW:{ label:"Soul Weaver" }, TH:{ label:"Thief" },
 };
-const ROLES = ["Opener","Tank","Bruiser","DPS","Healer","Buffer","Debuffer","Cleanser","Reviver","Counter"];
+// Default built-in roles (always available, shown first)
+const DEFAULT_ROLES = ["Opener","Tank","Bruiser","DPS","Healer","Buffer","Debuffer","Cleanser","Reviver","Counter"];
 const RC = {
   Opener:"#c8a020", Tank:"#2868b0", Bruiser:"#5848a8", DPS:"#b03820",
   Healer:"#287850", Buffer:"#208888", Debuffer:"#a82860", Cleanser:"#5890a8",
@@ -38,12 +39,14 @@ const LeafIcon = ({size=11,color="#4cba60"}) => (
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 const blankHero = () => ({ id:uid(), name:"", class:"KN", element:"fire", image:"", roles:[], buffs:[], debuffs:[], strengths:[], weaknesses:[], counters:[], strongAgainst:[], synergies:[], note:"", createdAt:Date.now() });
 const blankTag  = () => ({ id:uid(), name:"", icon:"", color:"#888888", createdAt:Date.now() });
-const blankSW   = () => ({ id:uid(), name:"", icon:"", linkedBuffs:[], linkedDebuffs:[], createdAt:Date.now() });
+const blankSW   = () => ({ id:uid(), name:"", icon:"", linkedBuffs:[], linkedDebuffs:[], linkedRoles:[], createdAt:Date.now() });
+const blankRole = () => ({ id:uid(), name:"", color:"#888888", createdAt:Date.now() });
 
 const freshData = () => ({
   version:SCHEMA_VERSION,
   heroes:[blankHero(),blankHero(),blankHero()],
   buffs:[], debuffs:[], strengths:[], weaknesses:[],
+  roles:[],
   settings:{ classIcons:{}, elementIcons:{} },
 });
 
@@ -58,7 +61,8 @@ function migrate(raw) {
     note:h.note??"", createdAt:h.createdAt??Date.now()
   });
   const ft=t=>({ id:t.id??uid(), name:t.name??"", icon:t.icon??"", color:t.color??"#888888", createdAt:t.createdAt??Date.now() });
-  const fs=s=>({ id:s.id??uid(), name:s.name??"", icon:s.icon??"", linkedBuffs:s.linkedBuffs??[], linkedDebuffs:s.linkedDebuffs??[], createdAt:s.createdAt??Date.now() });
+  const fs=s=>({ id:s.id??uid(), name:s.name??"", icon:s.icon??"", linkedBuffs:s.linkedBuffs??[], linkedDebuffs:s.linkedDebuffs??[], linkedRoles:s.linkedRoles??[], createdAt:s.createdAt??Date.now() });
+  const fr=r=>({ id:r.id??uid(), name:r.name??"", color:r.color??"#888888", createdAt:r.createdAt??Date.now() });
   d = {
     version: SCHEMA_VERSION,
     heroes:   (d.heroes??[]).map(fh),
@@ -66,6 +70,7 @@ function migrate(raw) {
     debuffs:  (d.debuffs??[]).map(ft),
     strengths:(d.strengths??[]).map(fs),
     weaknesses:(d.weaknesses??[]).map(fs),
+    roles:    (d.roles??[]).map(fr),
     settings: { classIcons:{}, elementIcons:{}, ...(d.settings??{}) }
   };
   return d;
@@ -119,7 +124,7 @@ async function exportJSON(data) {
     elementIcons[k] = await compressImage(v, 64, 0.8);
   const settings = { ...data.settings, classIcons, elementIcons };
 
-  const out = JSON.stringify({ version:SCHEMA_VERSION, heroes, buffs, debuffs, strengths, weaknesses, settings });
+  const out = JSON.stringify({ version:SCHEMA_VERSION, heroes, buffs, debuffs, strengths, weaknesses, roles:data.roles||[], settings });
   const blob = new Blob([out], { type:"application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -642,7 +647,11 @@ function HeroModal({hero,data,onSave,onClose}){
           </div>
         );
       })()}
-      <Field label="ROLES"><div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{ROLES.map(r=><Pill key={r} active={f.roles.includes(r)} color={RC[r]} onClick={()=>tog("roles",r)}>{r}</Pill>)}</div></Field>
+      <Field label="ROLES">{(()=>{
+        const allRoles=[...DEFAULT_ROLES,...(data.roles||[]).map(r=>r.name).filter(n=>n&&!DEFAULT_ROLES.includes(n))];
+        const roleColor=r=>RC[r]||(data.roles||[]).find(x=>x.name===r)?.color||"#888888";
+        return <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{allRoles.map(r=><Pill key={r} active={f.roles.includes(r)} color={roleColor(r)} onClick={()=>tog("roles",r)}>{r}</Pill>)}</div>;
+      })()}</Field>
       <SearchDropdown label="BUFFS (can provide)"  items={data.buffs}   sel={f.buffs}     onToggle={v=>tog("buffs",v)}   color="#208888"/>
       <SearchDropdown label="DEBUFFS (can apply)"  items={data.debuffs} sel={f.debuffs}   onToggle={v=>tog("debuffs",v)} color="#a82860"/>
       <SearchDropdown label="STRENGTHS"  items={data.strengths.map(s=>({...s,color:"#3a7a50"}))}  sel={f.strengths}  onToggle={v=>tog("strengths",v)}  color="#3a7a50"/>
@@ -690,8 +699,13 @@ function TagModal({type,tag,data,onSave,onClose}){
     ...Object.values(data.settings?.classIcons||{}),
     ...Object.values(data.settings?.elementIcons||{}),
   ].filter(Boolean),[data]);
+  // All available roles (default + custom)
+  const allRoles=useMemo(()=>[
+    ...DEFAULT_ROLES.map(name=>({id:name,name,color:RC[name]||"#888888"})),
+    ...(data.roles||[]).filter(r=>r.name&&!DEFAULT_ROLES.includes(r.name))
+  ],[data.roles]);
   return(
-    <Modal title={`${tag.id?"Edit":"New"} ${type.slice(0,-1)}`} onClose={onClose} width={500}>
+    <Modal title={`${tag.id?"Edit":"New"} ${type==="strengths"?"Strength":type==="weaknesses"?"Weakness":type==="buffs"?"Buff":"Debuff"}`} onClose={onClose} width={500}>
       <Field label="NAME"><input value={f.name} onChange={e=>setF(x=>({...x,name:e.target.value}))} placeholder="Tag name…" style={INP} autoFocus/></Field>
       <Field label="ICON / IMAGE"><ImagePicker value={f.icon} onChange={v=>setF(x=>({...x,icon:v}))} allImages={allImages}/></Field>
       {!isStrWk&&<Field label="COLOR"><div style={{display:"flex",gap:8,alignItems:"center"}}><input type="color" value={f.color||"#888888"} onChange={e=>setF(x=>({...x,color:e.target.value}))} style={{width:36,height:28,border:"none",background:"none",cursor:"pointer",padding:0}}/><span style={{fontSize:13,color:f.color,fontFamily:"'Crimson Text',serif"}}>{f.name||"preview"}</span></div></Field>}
@@ -701,17 +715,37 @@ function TagModal({type,tag,data,onSave,onClose}){
             <span style={{fontFamily:"Cinzel,serif",fontSize:9,color:T.gold,letterSpacing:1,display:"block",marginBottom:4}}>HOW LINKING WORKS</span>
             <span style={{color:"#5aaa70"}}>Strength + debuff link</span> → activates when the <em>enemy</em> carries that debuff.<br/>
             <span style={{color:"#5aaa70"}}>Strength + buff link</span> → activates when <em>your</em> team has that buff.<br/>
+            <span style={{color:"#5aaa70"}}>Strength + role link</span> → activates when the <em>enemy</em> has a hero with that role.<br/>
             <span style={{color:"#c06060"}}>Weakness + debuff link</span> → exposed when the <em>enemy</em> applies that debuff.<br/>
-            <span style={{color:"#c06060"}}>Weakness + buff link</span> → exposed when <em>your</em> team has that buff (it's countered).
+            <span style={{color:"#c06060"}}>Weakness + buff link</span> → exposed when <em>your</em> team has that buff (it's countered).<br/>
+            <span style={{color:"#c06060"}}>Weakness + role link</span> → exposed when the <em>enemy</em> has a hero with that role.
           </div>
           <SearchDropdown
-            label={type==="strengths"?"LINKED DEBUFFS — enemy must carry this (e.g. resist Stun when enemy has Stun)":"LINKED DEBUFFS — enemy applies this to exploit weakness"}
+            label={type==="strengths"?"LINKED DEBUFFS — enemy must carry this":"LINKED DEBUFFS — enemy applies this to exploit weakness"}
             items={data.debuffs} sel={f.linkedDebuffs} onToggle={v=>togL("linkedDebuffs",v)} color="#a82860"
           />
           <SearchDropdown
-            label={type==="strengths"?"LINKED BUFFS — your team must have this (e.g. +speed buff)":"LINKED BUFFS — your team has this but the weakness nullifies it"}
+            label={type==="strengths"?"LINKED BUFFS — your team must have this":"LINKED BUFFS — your team has this but weakness nullifies it"}
             items={data.buffs} sel={f.linkedBuffs} onToggle={v=>togL("linkedBuffs",v)} color="#208888"
           />
+          <Field label={type==="strengths"?"LINKED ROLES — strong against enemies with these roles":"LINKED ROLES — weak against enemies with these roles"}>
+            <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+              {allRoles.map(r=>{
+                const active=(f.linkedRoles||[]).includes(r.id);
+                return(
+                  <button key={r.id} onClick={()=>togL("linkedRoles",r.id)} className="hov"
+                    style={{background:active?r.color+"33":T.card,border:`1px solid ${active?r.color:T.border}`,color:active?r.color:T.sub,padding:"3px 10px",borderRadius:3,fontSize:11,fontFamily:"'Crimson Text',serif",cursor:"pointer"}}>
+                    {r.name}
+                  </button>
+                );
+              })}
+            </div>
+            {(f.linkedRoles||[]).length>0&&(
+              <div style={{fontSize:10,color:T.dim,fontFamily:"'Crimson Text',serif",marginTop:4}}>
+                {(f.linkedRoles||[]).map(id=>allRoles.find(r=>r.id===id)?.name).filter(Boolean).join(", ")}
+              </div>
+            )}
+          </Field>
         </>
       )}
       <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
@@ -826,6 +860,7 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
   const strengthData=useMemo(()=>{
     const pairs=[];
     const tagMap=new Map();
+    const oppRoleSet=new Set(opponents.flatMap(h=>h.roles||[]));
     // ── Elemental advantage (auto) ──
     teammates.forEach(mine=>{
       opponents.forEach(e=>{
@@ -844,14 +879,32 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
       (mine.strengths||[]).forEach(sid=>{
         const s=data.strengths.find(x=>x.id===sid);
         if(!s)return;
+        const debMatch=(s.linkedDebuffs||[]).some(d=>oppDebSet.has(d));
+        const bufMatch=(s.linkedBuffs||[]).some(b=>ownBufSet.has(b));
+        // Collect unique enemy heroes that match a linked role
+        const roleHeroes=[];
+        (s.linkedRoles||[]).forEach(role=>{
+          opponents.forEach(e=>{
+            if((e.roles||[]).includes(role)&&!roleHeroes.find(x=>x.id===e.id))
+              roleHeroes.push(e);
+          });
+        });
+        const roleMatch=roleHeroes.length>0;
         if(!tagMap.has(sid)){
-          const debMatch=(s.linkedDebuffs||[]).some(d=>oppDebSet.has(d));
-          const bufMatch=(s.linkedBuffs||[]).some(b=>ownBufSet.has(b));
-          tagMap.set(sid,{tag:s,highlighted:debMatch||bufMatch});
+          tagMap.set(sid,{tag:s,highlighted:debMatch||bufMatch||roleMatch,roleHeroes});
         }
         (s.linkedDebuffs||[]).forEach(d=>{
           opponents.forEach(e=>{
             if((e.debuffs||[]).includes(d)){
+              const exists=pairs.find(p=>p.mine.id===mine.id&&p.opp.id===e.id&&p.label===s.name);
+              if(!exists)pairs.push({mine,opp:e,label:s.name,elemental:false});
+            }
+          });
+        });
+        // Role-based pairs
+        (s.linkedRoles||[]).forEach(role=>{
+          opponents.forEach(e=>{
+            if((e.roles||[]).includes(role)){
               const exists=pairs.find(p=>p.mine.id===mine.id&&p.opp.id===e.id&&p.label===s.name);
               if(!exists)pairs.push({mine,opp:e,label:s.name,elemental:false});
             }
@@ -866,6 +919,7 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
   const weaknessData=useMemo(()=>{
     const pairs=[];
     const tagMap=new Map();
+    const oppRoleSet=new Set(opponents.flatMap(h=>h.roles||[]));
     // ── Elemental weakness (auto) ──
     teammates.forEach(mine=>{
       opponents.forEach(e=>{
@@ -877,14 +931,31 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
       (mine.weaknesses||[]).forEach(wid=>{
         const w=data.weaknesses.find(x=>x.id===wid);
         if(!w)return;
+        const debMatch=(w.linkedDebuffs||[]).some(d=>oppDebSet.has(d));
+        const bufMatch=(w.linkedBuffs||[]).some(b=>ownBufSet.has(b));
+        const roleHeroes=[];
+        (w.linkedRoles||[]).forEach(role=>{
+          opponents.forEach(e=>{
+            if((e.roles||[]).includes(role)&&!roleHeroes.find(x=>x.id===e.id))
+              roleHeroes.push(e);
+          });
+        });
+        const roleMatch=roleHeroes.length>0;
         if(!tagMap.has(wid)){
-          const debMatch=(w.linkedDebuffs||[]).some(d=>oppDebSet.has(d));
-          const bufMatch=(w.linkedBuffs||[]).some(b=>ownBufSet.has(b));
-          tagMap.set(wid,{tag:w,highlighted:debMatch||bufMatch});
+          tagMap.set(wid,{tag:w,highlighted:debMatch||bufMatch||roleMatch,roleHeroes});
         }
         (w.linkedDebuffs||[]).forEach(d=>{
           opponents.forEach(e=>{
             if((e.debuffs||[]).includes(d)){
+              const exists=pairs.find(p=>p.mine.id===mine.id&&p.opp.id===e.id&&!p.elemental);
+              if(!exists)pairs.push({mine,opp:e,elemental:false});
+            }
+          });
+        });
+        // Role-based pairs
+        (w.linkedRoles||[]).forEach(role=>{
+          opponents.forEach(e=>{
+            if((e.roles||[]).includes(role)){
               const exists=pairs.find(p=>p.mine.id===mine.id&&p.opp.id===e.id&&!p.elemental);
               if(!exists)pairs.push({mine,opp:e,elemental:false});
             }
@@ -982,11 +1053,21 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
               {!p.elemental && p.label&&<span style={{fontSize:7,color:"#3a9a60",fontFamily:"'Crimson Text',serif",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:40}}>{p.label}</span>}
             </div>
           ))}
-          {strengthData.tags.map(({tag,highlighted},i)=>(
-            <div key={`t${i}`} className={highlighted?"hl":""} style={{display:"flex",alignItems:"center",gap:3,borderRadius:2,padding:"0 2px",transition:"all 0.2s"}}>
-              <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
-              <span style={{fontSize:9,color:highlighted?HIGHLIGHT:"#5aaa70",fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400}}>{tag.name}</span>
-              {highlighted&&<span style={{fontSize:9,color:HIGHLIGHT,flexShrink:0}}>★</span>}
+          {strengthData.tags.map(({tag,highlighted,roleHeroes},i)=>(
+            <div key={`t${i}`} className={highlighted?"hl":""} style={{display:"flex",flexDirection:"column",gap:2,borderRadius:2,padding:"2px 2px",transition:"all 0.2s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:3}}>
+                <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
+                <span style={{fontSize:9,color:highlighted?HIGHLIGHT:"#5aaa70",fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400}}>{tag.name}</span>
+                {highlighted&&<span style={{fontSize:9,color:HIGHLIGHT,flexShrink:0}}>★</span>}
+              </div>
+              {roleHeroes&&roleHeroes.length>0&&(
+                <div style={{display:"flex",alignItems:"center",gap:2,paddingLeft:4}}>
+                  <span style={{fontSize:8,color:"#5aaa70",flexShrink:0}}>▶</span>
+                  {roleHeroes.map(e=>(
+                    <Ico key={e.id} src={e.image} size={13} fallback={clsIcon(e.class,data.settings)}/>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
           {strengthData.pairs.length===0&&strengthData.tags.length===0&&<AEmpty/>}
@@ -1003,11 +1084,21 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
               {elemental && <LeafIcon size={10} color="#4cba60"/>}
             </div>
           ))}
-          {weaknessData.tags.map(({tag,highlighted},i)=>(
-            <div key={`t${i}`} className={highlighted?"hl":""} style={{display:"flex",alignItems:"center",gap:3,borderRadius:2,padding:"0 2px",transition:"all 0.2s"}}>
-              <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
-              <span style={{fontSize:9,color:highlighted?HIGHLIGHT:"#a06060",fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400}}>{tag.name}</span>
-              {highlighted&&<span style={{fontSize:9,color:HIGHLIGHT,flexShrink:0}}>⚠</span>}
+          {weaknessData.tags.map(({tag,highlighted,roleHeroes},i)=>(
+            <div key={`t${i}`} className={highlighted?"hl":""} style={{display:"flex",flexDirection:"column",gap:2,borderRadius:2,padding:"2px 2px",transition:"all 0.2s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:3}}>
+                <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
+                <span style={{fontSize:9,color:highlighted?HIGHLIGHT:"#a06060",fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400}}>{tag.name}</span>
+                {highlighted&&<span style={{fontSize:9,color:HIGHLIGHT,flexShrink:0}}>⚠</span>}
+              </div>
+              {roleHeroes&&roleHeroes.length>0&&(
+                <div style={{display:"flex",alignItems:"center",gap:2,paddingLeft:4}}>
+                  <span style={{fontSize:8,color:"#c06060",flexShrink:0}}>◀</span>
+                  {roleHeroes.map(e=>(
+                    <Ico key={e.id} src={e.image} size={13} fallback={clsIcon(e.class,data.settings)}/>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
           {weaknessData.pairs.length===0&&weaknessData.tags.length===0&&<AEmpty/>}
@@ -1095,7 +1186,7 @@ function HeroesView({data,onUpdate}){
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontFamily:"Cinzel,serif",color:T.gold,fontSize:12,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{hero.name||<span style={{color:T.dim,fontStyle:"italic"}}>Unnamed</span>}</div>
                 <div style={{fontSize:10,color:elColor(hero.element),fontFamily:"Cinzel,serif",marginBottom:3}}>{EL_META[hero.element]?.label} · {CL_META[hero.class]?.label}</div>
-                <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>{hero.roles.map(r=><span key={r} style={{fontSize:8,padding:"1px 4px",borderRadius:2,background:RC[r]+"22",color:RC[r]}}>{r}</span>)}</div>
+                <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>{hero.roles.map(r=>{const color=RC[r]||(data.roles||[]).find(x=>x.name===r)?.color||"#888";return <span key={r} style={{fontSize:8,padding:"1px 4px",borderRadius:2,background:color+"22",color}}>{r}</span>;})}</div>
               </div>
             </div>
             {hero.note&&<div style={{fontSize:12,color:T.sub,fontStyle:"italic",marginBottom:6,fontFamily:"'Crimson Text',serif"}}>{hero.note}</div>}
@@ -1124,20 +1215,78 @@ function TagsView({data,onUpdate}){
   const [edit,setEdit]=useState(null);
   const [delConf,setDelConf]=useState(null);
   const [searches,setSearches]=useState({buffs:"",debuffs:"",strengths:"",weaknesses:""});
+  const [roleEdit,setRoleEdit]=useState(null); // {id,name,color} or "new"
+  const [roleDelConf,setRoleDelConf]=useState(null);
+
   function saveTag(type,tag){const arr=[...data[type]];const idx=arr.findIndex(t=>t.id===tag.id);if(idx>=0)arr[idx]=tag;else arr.push({...tag,id:uid(),createdAt:Date.now()});onUpdate({...data,[type]:arr});setEdit(null);}
   function doDelete(type,id){onUpdate({...data,[type]:data[type].filter(t=>t.id!==id)});setDelConf(null);}
-  function doDuplicate(type,tag){const copy={...tag,id:uid(),name:(tag.name||"Unnamed")+" (Copy)",createdAt:Date.now(),linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])],};onUpdate({...data,[type]:[...data[type],copy]});}
+  function doDuplicate(type,tag){const copy={...tag,id:uid(),name:(tag.name||"Unnamed")+" (Copy)",createdAt:Date.now(),linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])],linkedRoles:[...(tag.linkedRoles||[])],};onUpdate({...data,[type]:[...data[type],copy]});}
+
+  function saveRole(role){
+    const roles=[...(data.roles||[])];
+    const idx=roles.findIndex(r=>r.id===role.id);
+    if(idx>=0)roles[idx]=role; else roles.push({...role,id:uid(),createdAt:Date.now()});
+    onUpdate({...data,roles});setRoleEdit(null);
+  }
+  function deleteRole(id){onUpdate({...data,roles:(data.roles||[]).filter(r=>r.id!==id)});setRoleDelConf(null);}
+  function dupeRole(role){onUpdate({...data,roles:[...(data.roles||[]),{...role,id:uid(),name:role.name+" (Copy)",createdAt:Date.now()}]});}
   const SECS=[
     {key:"buffs",    label:"BUFFS",     color:"#208888",desc:"Buffs heroes can provide to allies"},
     {key:"debuffs",  label:"DEBUFFS",   color:"#a82860",desc:"Debuffs heroes can apply to enemies"},
-    {key:"strengths",label:"STRENGTHS", color:"#3a7a50",desc:"Resistances / advantages — link buffs or debuffs to activate in Draft"},
-    {key:"weaknesses",label:"WEAKNESSES",color:"#7a3030",desc:"Vulnerabilities — link buffs or debuffs to expose in Draft"},
+    {key:"strengths",label:"STRENGTHS", color:"#3a7a50",desc:"Resistances / advantages — link buffs, debuffs or roles"},
+    {key:"weaknesses",label:"WEAKNESSES",color:"#7a3030",desc:"Vulnerabilities — link buffs, debuffs or roles"},
   ];
   return(
     <div style={{height:"100%",overflowY:"auto",padding:"14px 18px"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-        <span style={{fontSize:12,color:T.sub,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>Tags are labels assigned to heroes. Strengths and Weaknesses link to buffs/debuffs for automatic Draft analysis.</span>
+        <span style={{fontSize:12,color:T.sub,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>Tags are labels assigned to heroes. Strengths and Weaknesses link to buffs/debuffs/roles for automatic Draft analysis.</span>
         <SortRow sort={sort} setSort={setSort}/>
+      </div>
+
+      {/* ── CUSTOM ROLES ── */}
+      <div style={{marginBottom:28}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+          <span style={{fontFamily:"Cinzel,serif",fontSize:10,color:T.gold,letterSpacing:2}}>ROLES</span>
+          <span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>Custom roles to assign to heroes (built-in roles always available)</span>
+          <Btn onClick={()=>setRoleEdit(blankRole())} style={{marginLeft:"auto"}}>+ Add</Btn>
+        </div>
+        {/* Built-in roles preview */}
+        <div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:8}}>
+          {DEFAULT_ROLES.map(r=><span key={r} style={{fontSize:10,padding:"2px 8px",borderRadius:3,background:RC[r]+"22",border:`1px solid ${RC[r]}55`,color:RC[r],fontFamily:"'Crimson Text',serif"}}>{r}</span>)}
+          <span style={{fontSize:10,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",alignSelf:"center",marginLeft:4}}>built-in</span>
+        </div>
+        {/* Custom roles */}
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {(data.roles||[]).length===0&&<span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",padding:"4px 0"}}>No custom roles yet.</span>}
+          {(data.roles||[]).map(role=>(
+            <div key={role.id} style={{background:T.card,border:`1px solid ${role.color||"#888"}33`,borderRadius:4,padding:"6px 10px",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{width:14,height:14,borderRadius:2,background:role.color||"#888",display:"inline-block",flexShrink:0}}/>
+              <span style={{flex:1,fontSize:12,color:role.color||T.text,fontFamily:"Cinzel,serif"}}>{role.name||<span style={{color:T.dim,fontStyle:"italic"}}>Unnamed</span>}</span>
+              <div style={{display:"flex",gap:4,flexShrink:0}}>
+                <Btn onClick={()=>setRoleEdit({...role})}>Edit</Btn>
+                <Btn onClick={()=>dupeRole(role)}>Dupe</Btn>
+                {roleDelConf===role.id
+                  ?<><Btn variant="danger" onClick={()=>deleteRole(role.id)}>Confirm</Btn><Btn onClick={()=>setRoleDelConf(null)}>Cancel</Btn></>
+                  :<Btn variant="danger" onClick={()=>setRoleDelConf(role.id)}>Delete</Btn>
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Inline role editor */}
+        {roleEdit&&(
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:4,padding:"10px 12px",marginTop:8,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <input value={roleEdit.name} onChange={e=>setRoleEdit(r=>({...r,name:e.target.value}))} placeholder="Role name…" style={{...INP,width:160}} autoFocus/>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <input type="color" value={roleEdit.color||"#888888"} onChange={e=>setRoleEdit(r=>({...r,color:e.target.value}))} style={{width:32,height:28,border:"none",background:"none",cursor:"pointer",padding:0}}/>
+              <span style={{fontSize:12,color:roleEdit.color,fontFamily:"'Crimson Text',serif"}}>{roleEdit.name||"preview"}</span>
+            </div>
+            <div style={{display:"flex",gap:6,marginLeft:"auto"}}>
+              <Btn onClick={()=>setRoleEdit(null)}>Cancel</Btn>
+              <Btn variant="primary" onClick={()=>roleEdit.name.trim()&&saveRole(roleEdit)}>Save</Btn>
+            </div>
+          </div>
+        )}
       </div>
       {SECS.map(({key,label,color,desc})=>{
         const filtered=sorted(data[key],sort).filter(t=>!searches[key]||(t.name||"").toLowerCase().includes(searches[key].toLowerCase()));
