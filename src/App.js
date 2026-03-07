@@ -521,42 +521,74 @@ function addToPalette(color){
 
 function ColorPicker({value,onChange}){
   const [palette,setPalette]=useState(()=>loadPalette());
-  const [hovering,setHovering]=useState(null);
-  function pick(color){ onChange(color); }
-  function commit(color){
-    addToPalette(color);
-    setPalette(loadPalette());
+  const [deleteMode,setDeleteMode]=useState(false);
+  const [toDelete,setToDelete]=useState([]);
+  const commitTimer=useRef(null);
+
+  function pick(color){
+    onChange(color);
+    // debounce palette save so rapid wheel dragging doesn't spam
+    clearTimeout(commitTimer.current);
+    commitTimer.current=setTimeout(()=>{
+      addToPalette(color);
+      setPalette(loadPalette());
+    },600);
   }
-  function removeFromPalette(color){
-    const p=loadPalette().filter(c=>c.toLowerCase()!==color.toLowerCase());
+
+  function toggleDelete(c){
+    setToDelete(prev=>prev.includes(c)?prev.filter(x=>x!==c):[...prev,c]);
+  }
+
+  function confirmDelete(){
+    const p=loadPalette().filter(c=>!toDelete.includes(c));
     savePalette(p);
     setPalette(p);
+    setToDelete([]);
+    setDeleteMode(false);
   }
+
+  function cancelDelete(){
+    setToDelete([]);
+    setDeleteMode(false);
+  }
+
   return(
     <div>
       <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
         <input type="color" value={value||"#888888"}
           onChange={e=>pick(e.target.value)}
-          onBlur={e=>commit(e.target.value)}
           style={{width:36,height:28,border:"none",background:"none",cursor:"pointer",padding:0,flexShrink:0}}/>
-        <input value={value||""} onChange={e=>{pick(e.target.value);}} onBlur={e=>commit(e.target.value)}
+        <input value={value||""} onChange={e=>pick(e.target.value)}
           placeholder="#888888" style={{...INP,width:90,fontSize:12}}/>
         <span style={{fontSize:13,color:value,fontFamily:"'Crimson Text',serif",minWidth:50}}>■ preview</span>
       </div>
       {palette.length>0&&(
-        <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
-          {palette.map((c,i)=>(
-            <div key={i} style={{position:"relative",flexShrink:0}}
-              onMouseEnter={()=>setHovering(i)} onMouseLeave={()=>setHovering(null)}>
-              <div onClick={()=>pick(c)} title={c}
-                style={{width:18,height:18,borderRadius:3,background:c,cursor:"pointer",border:`2px solid ${c===value?"#fff":T.border}`,transition:"border-color 0.1s"}}/>
-              {hovering===i&&(
-                <div onClick={()=>removeFromPalette(c)}
-                  style={{position:"absolute",top:-6,right:-6,width:13,height:13,borderRadius:"50%",background:"#3a0e0e",border:`1px solid #c06060`,color:"#c06060",fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",lineHeight:1,zIndex:10}}>×</div>
-              )}
-            </div>
-          ))}
-          <span style={{fontSize:9,color:T.dim,fontFamily:"'Crimson Text',serif",marginLeft:2}}>saved · hover to remove</span>
+        <div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center",marginBottom:4}}>
+            {palette.map((c,i)=>{
+              const sel=toDelete.includes(c);
+              return(
+                <div key={i} onClick={()=>deleteMode?toggleDelete(c):pick(c)} title={c}
+                  style={{width:20,height:20,borderRadius:3,background:c,cursor:"pointer",
+                    border:`2px solid ${sel?"#c06060":c===value&&!deleteMode?"#fff":T.border}`,
+                    outline:sel?"2px solid #c06060":"none",outlineOffset:1,
+                    flexShrink:0,transition:"border-color 0.1s",position:"relative"}}>
+                  {sel&&<span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#fff",fontWeight:700,textShadow:"0 0 3px #000"}}>✕</span>}
+                </div>
+              );
+            })}
+          </div>
+          {!deleteMode
+            ? <button onClick={()=>setDeleteMode(true)} className="hov"
+                style={{fontSize:9,color:T.dim,fontFamily:"'Crimson Text',serif",background:"none",border:`1px solid ${T.border}`,borderRadius:2,padding:"1px 7px",cursor:"pointer"}}>
+                manage palette
+              </button>
+            : <div style={{display:"flex",gap:5,alignItems:"center",marginTop:2}}>
+                <span style={{fontSize:9,color:"#c06060",fontFamily:"'Crimson Text',serif"}}>{toDelete.length} selected</span>
+                <Btn variant="danger" onClick={confirmDelete} style={{fontSize:9,padding:"2px 8px"}} disabled={toDelete.length===0}>Delete</Btn>
+                <Btn onClick={cancelDelete} style={{fontSize:9,padding:"2px 8px"}}>Cancel</Btn>
+              </div>
+          }
         </div>
       )}
     </div>
@@ -1379,10 +1411,36 @@ function TagsView({data,onUpdate}){
   const [edit,setEdit]=useState(null);
   const [delConf,setDelConf]=useState(null);
   const [searches,setSearches]=useState({buffs:"",debuffs:"",strengths:"",weaknesses:""});
-  const [roleEdit,setRoleEdit]=useState(null); // {id,name,color} or "new"
+  const [roleEdit,setRoleEdit]=useState(null);
   const [roleDelConf,setRoleDelConf]=useState(null);
   const [uniqueRoleEdit,setUniqueRoleEdit]=useState(null);
   const [uniqueRoleDelConf,setUniqueRoleDelConf]=useState(null);
+  // multi-select per section: {buffs:Set, debuffs:Set, strengths:Set, weaknesses:Set}
+  const [selected,setSelected]=useState({buffs:new Set(),debuffs:new Set(),strengths:new Set(),weaknesses:new Set()});
+  // bulk action mode per section: null | "color" | "delete"
+  const [bulkMode,setBulkMode]=useState({buffs:null,debuffs:null,strengths:null,weaknesses:null});
+  const [bulkColor,setBulkColor]=useState({buffs:"#888888",debuffs:"#888888",strengths:"#888888",weaknesses:"#888888"});
+
+  function toggleSelect(key,id){
+    setSelected(s=>{ const n=new Set(s[key]); n.has(id)?n.delete(id):n.add(id); return {...s,[key]:n}; });
+  }
+  function toggleSelectAll(key,ids){
+    setSelected(s=>{ const allSel=ids.every(id=>s[key].has(id)); return {...s,[key]:allSel?new Set():new Set(ids)}; });
+  }
+  function clearSelection(key){ setSelected(s=>({...s,[key]:new Set()})); setBulkMode(b=>({...b,[key]:null})); }
+
+  function applyBulkColor(key){
+    const color=bulkColor[key];
+    const arr=data[key].map(t=>selected[key].has(t.id)?{...t,color}:t);
+    onUpdate({...data,[key]:arr});
+    addToPalette(color);
+    clearSelection(key);
+  }
+  function applyBulkDelete(key){
+    const arr=data[key].filter(t=>!selected[key].has(t.id));
+    onUpdate({...data,[key]:arr});
+    clearSelection(key);
+  }
 
   function saveTag(type,tag){const arr=[...data[type]];const idx=arr.findIndex(t=>t.id===tag.id);if(idx>=0)arr[idx]=tag;else arr.push({...tag,id:uid(),createdAt:Date.now()});onUpdate({...data,[type]:arr});setEdit(null);}
   function doDelete(type,id){onUpdate({...data,[type]:data[type].filter(t=>t.id!==id)});setDelConf(null);}
@@ -1416,12 +1474,10 @@ function TagsView({data,onUpdate}){
           <span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>Custom roles to assign to heroes (built-in roles always available)</span>
           <Btn onClick={()=>setRoleEdit(blankRole())} style={{marginLeft:"auto"}}>+ Add</Btn>
         </div>
-        {/* Built-in roles preview */}
         <div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:8}}>
           {DEFAULT_ROLES.map(r=><span key={r} style={{fontSize:10,padding:"2px 8px",borderRadius:3,background:RC[r]+"22",border:`1px solid ${RC[r]}55`,color:RC[r],fontFamily:"'Crimson Text',serif"}}>{r}</span>)}
           <span style={{fontSize:10,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",alignSelf:"center",marginLeft:4}}>built-in</span>
         </div>
-        {/* Custom roles */}
         <div style={{display:"flex",flexDirection:"column",gap:4}}>
           {(data.roles||[]).length===0&&<span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",padding:"4px 0"}}>No custom roles yet.</span>}
           {(data.roles||[]).map(role=>(
@@ -1439,7 +1495,6 @@ function TagsView({data,onUpdate}){
             </div>
           ))}
         </div>
-        {/* Inline role editor */}
         {roleEdit&&(
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:4,padding:"10px 12px",marginTop:8,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <input value={roleEdit.name} onChange={e=>setRoleEdit(r=>({...r,name:e.target.value}))} placeholder="Role name…" style={{...INP,width:160}} autoFocus/>
@@ -1475,7 +1530,6 @@ function TagsView({data,onUpdate}){
                   }
                 </div>
               </div>
-              {/* Summary of what's linked */}
               <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                 {(ur.linkedBuffs||[]).map(id=>{const b=data.buffs.find(x=>x.id===id);return b?<span key={id} style={{fontSize:9,padding:"1px 5px",borderRadius:2,background:"#20888822",color:"#208888"}}>{b.name}</span>:null;})}
                 {(ur.linkedDebuffs||[]).map(id=>{const d=data.debuffs.find(x=>x.id===id);return d?<span key={id} style={{fontSize:9,padding:"1px 5px",borderRadius:2,background:"#a8286022",color:"#a82860"}}>{d.name}</span>:null;})}
@@ -1490,19 +1544,63 @@ function TagsView({data,onUpdate}){
 
       {SECS.map(({key,label,color,desc})=>{
         const filtered=sorted(data[key],sort).filter(t=>!searches[key]||(t.name||"").toLowerCase().includes(searches[key].toLowerCase()));
+        const filteredIds=filtered.map(t=>t.id);
+        const sel=selected[key];
+        const allChecked=filteredIds.length>0&&filteredIds.every(id=>sel.has(id));
+        const anyChecked=sel.size>0;
+        const mode=bulkMode[key];
         return(
           <div key={key} style={{marginBottom:24}}>
+            {/* Section header */}
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
               <span style={{fontFamily:"Cinzel,serif",fontSize:10,color,letterSpacing:2}}>{label}</span>
               <span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>{desc}</span>
               <Btn onClick={()=>setEdit({type:key,tag:key==="strengths"||key==="weaknesses"?blankSW():blankTag()})} style={{marginLeft:"auto"}}>+ Add</Btn>
             </div>
-            <div style={{marginBottom:6}}>
-              <input value={searches[key]} onChange={e=>setSearches(s=>({...s,[key]:e.target.value}))} placeholder={`Search ${label.toLowerCase()}…`} style={{...INP,fontSize:11,width:220}}/>
+            {/* Search + select-all */}
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
+              <input value={searches[key]} onChange={e=>setSearches(s=>({...s,[key]:e.target.value}))} placeholder={`Search ${label.toLowerCase()}…`} style={{...INP,fontSize:11,width:200}}/>
+              {filtered.length>0&&(
+                <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",userSelect:"none"}}>
+                  <input type="checkbox" checked={allChecked} onChange={()=>toggleSelectAll(key,filteredIds)}
+                    style={{accentColor:color,width:13,height:13,cursor:"pointer"}}/>
+                  Select all
+                </label>
+              )}
+              {anyChecked&&!mode&&(
+                <div style={{display:"flex",gap:5,marginLeft:"auto"}}>
+                  <span style={{fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",alignSelf:"center"}}>{sel.size} selected</span>
+                  <Btn onClick={()=>setBulkMode(b=>({...b,[key]:"color"}))}>Change Colour</Btn>
+                  <Btn variant="danger" onClick={()=>setBulkMode(b=>({...b,[key]:"delete"}))}>Delete</Btn>
+                  <Btn onClick={()=>clearSelection(key)}>Cancel</Btn>
+                </div>
+              )}
             </div>
+            {/* Bulk colour panel */}
+            {mode==="color"&&(
+              <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:4,padding:"10px 12px",marginBottom:8}}>
+                <div style={{fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",marginBottom:6}}>Set colour for {sel.size} selected tag{sel.size>1?"s":""}:</div>
+                <ColorPicker value={bulkColor[key]} onChange={v=>setBulkColor(b=>({...b,[key]:v}))}/>
+                <div style={{display:"flex",gap:6,marginTop:8}}>
+                  <Btn variant="primary" onClick={()=>applyBulkColor(key)}>Apply to {sel.size} tag{sel.size>1?"s":""}</Btn>
+                  <Btn onClick={()=>clearSelection(key)}>Cancel</Btn>
+                </div>
+              </div>
+            )}
+            {/* Bulk delete confirm */}
+            {mode==="delete"&&(
+              <div style={{background:"#2a0e0e",border:`1px solid #5a1a1a`,borderRadius:4,padding:"10px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{fontSize:12,color:"#c06060",fontFamily:"'Crimson Text',serif",flex:1}}>Delete {sel.size} selected tag{sel.size>1?"s":""}? This cannot be undone.</span>
+                <Btn variant="danger" onClick={()=>applyBulkDelete(key)}>Confirm Delete</Btn>
+                <Btn onClick={()=>clearSelection(key)}>Cancel</Btn>
+              </div>
+            )}
+            {/* Tag list */}
             <div style={{maxHeight:220,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
               {filtered.map(tag=>(
-                <div key={tag.id} style={{background:T.card,border:`1px solid ${tag.color||color}33`,borderRadius:4,padding:"6px 10px",display:"flex",alignItems:"center",gap:8}}>
+                <div key={tag.id} style={{background:sel.has(tag.id)?color+"18":T.card,border:`1px solid ${sel.has(tag.id)?color:tag.color||color}33`,borderRadius:4,padding:"6px 10px",display:"flex",alignItems:"center",gap:8,transition:"background 0.1s"}}>
+                  <input type="checkbox" checked={sel.has(tag.id)} onChange={()=>toggleSelect(key,tag.id)}
+                    style={{accentColor:color,width:13,height:13,cursor:"pointer",flexShrink:0}}/>
                   <Ico src={tag.icon} size={22} fallback={tag.name?.[0]||"?"}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:12,color:tag.color||color,fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tag.name||<span style={{color:T.dim,fontStyle:"italic"}}>Unnamed</span>}</div>
