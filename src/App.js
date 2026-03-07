@@ -469,9 +469,6 @@ const GS = `
   .both-glow{box-shadow:0 0 0 1px #a88020,0 0 16px #a8802044!important;}
   .active-slot{box-shadow:0 0 0 1px ${T.gold},0 0 12px ${T.gold}33!important;border-color:${T.gold}!important;}
   .hl{background:${HIGHLIGHT}22!important;border-color:${HIGHLIGHT}88!important;box-shadow:0 0 5px ${HIGHLIGHT}44!important;}
-  .tip{position:relative;}
-  .tip .tipbox{display:none;position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#101d2e;border:1px solid ${T.border};color:${T.text};font-family:'Crimson Text',serif;font-size:11px;padding:4px 8px;border-radius:3px;white-space:nowrap;z-index:9999;pointer-events:none;box-shadow:0 4px 16px #000a;}
-  .tip:hover .tipbox{display:block;}
 `;
 const INP={background:T.bg,border:`1px solid ${T.border}`,color:T.text,padding:"6px 10px",borderRadius:3,fontSize:13,outline:"none",width:"100%",fontFamily:"'Crimson Text',serif"};
 
@@ -1183,14 +1180,10 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
           {synPairs.map(([a,b],i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:3}}>
               <Ico src={a.image} size={13} fallback={clsIcon(a.class,data.settings)}/>
-              <span className="tip" style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"default"}}>
-                {a.name||"—"}<span className="tipbox">{a.name||"—"}</span>
-              </span>
+              <Tip text={a.name||"—"} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{a.name||"—"}</span></Tip>
               <span style={{fontSize:8,color:T.gold}}>✦</span>
               <Ico src={b.image} size={13} fallback={clsIcon(b.class,data.settings)}/>
-              <span className="tip" style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"default"}}>
-                {b.name||"—"}<span className="tipbox">{b.name||"—"}</span>
-              </span>
+              <Tip text={b.name||"—"} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{b.name||"—"}</span></Tip>
             </div>
           ))}
           {synPairs.length===0&&<AEmpty/>}
@@ -1200,39 +1193,26 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
           {strengthData.pairs.map((p,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:3}}>
               <Ico src={p.mine.image} size={13} fallback={clsIcon(p.mine.class,data.settings)}/>
-              <span className="tip" style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",maxWidth:52,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"default"}}>
-                {p.mine.name||"—"}<span className="tipbox">{p.mine.name||"—"}</span>
-              </span>
+              <Tip text={p.mine.name||"—"} style={{maxWidth:52,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{p.mine.name||"—"}</span></Tip>
               <span style={{fontSize:9,color:"#5aaa70"}}>▶</span>
               <Ico src={p.opp.image} size={13} fallback={clsIcon(p.opp.class,data.settings)}/>
-              <span className="tip" style={{fontSize:9,color:"#a0d0a8",fontFamily:"Cinzel,serif",maxWidth:52,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"default"}}>
-                {p.opp.name||"—"}<span className="tipbox">{p.opp.name||"—"}</span>
-              </span>
+              <Tip text={p.opp.name||"—"} style={{maxWidth:52,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:"#a0d0a8",fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{p.opp.name||"—"}</span></Tip>
               {p.elemental && <LeafIcon size={10} color="#4cba60"/>}
-              {!p.elemental && p.label&&(
-                <span className="tip" style={{fontSize:7,color:"#3a9a60",fontFamily:"'Crimson Text',serif",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:40,cursor:"default"}}>
-                  {p.label}<span className="tipbox">{p.label}</span>
-                </span>
-              )}
+              {!p.elemental && p.label&&<Tip text={p.label} style={{maxWidth:40,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:7,color:"#3a9a60",fontFamily:"'Crimson Text',serif",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{p.label}</span></Tip>}
             </div>
           ))}
           {strengthData.tags.map(({tag,highlighted,roleHeroes},i)=>(
             <div key={`t${i}`} className={highlighted?"hl":""} style={{display:"flex",flexDirection:"column",gap:2,borderRadius:2,padding:"2px 2px",transition:"all 0.2s"}}>
               <div style={{display:"flex",alignItems:"center",gap:3}}>
                 <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
-                <span className="tip" style={{fontSize:9,color:highlighted?HIGHLIGHT:(tag.color||"#5aaa70"),fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400,cursor:"default"}}>
-                  {tag.name}<span className="tipbox">{tag.name}</span>
-                </span>
+                <Tip text={tag.name} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:highlighted?HIGHLIGHT:(tag.color||"#5aaa70"),fontFamily:"'Crimson Text',serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400,display:"block"}}>{tag.name}</span></Tip>
                 {highlighted&&<span style={{fontSize:9,color:HIGHLIGHT,flexShrink:0}}>★</span>}
               </div>
               {roleHeroes&&roleHeroes.length>0&&(
                 <div style={{display:"flex",alignItems:"center",gap:2,paddingLeft:4}}>
                   <span style={{fontSize:8,color:"#5aaa70",flexShrink:0}}>▶</span>
                   {roleHeroes.map(e=>(
-                    <span key={e.id} className="tip" style={{display:"inline-flex",cursor:"default"}}>
-                      <Ico src={e.image} size={13} fallback={clsIcon(e.class,data.settings)}/>
-                      <span className="tipbox">{e.name||"—"}</span>
-                    </span>
+                    <Ico key={e.id} src={e.image} size={13} fallback={clsIcon(e.class,data.settings)}/>
                   ))}
                 </div>
               )}
@@ -1245,14 +1225,10 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
           {weaknessData.pairs.map(({mine,opp:e,elemental},i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:3}}>
               <Ico src={mine.image} size={13} fallback={clsIcon(mine.class,data.settings)}/>
-              <span className="tip" style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",maxWidth:52,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"default"}}>
-                {mine.name||"—"}<span className="tipbox">{mine.name||"—"}</span>
-              </span>
+              <Tip text={mine.name||"—"} style={{maxWidth:52,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{mine.name||"—"}</span></Tip>
               <span style={{fontSize:9,color:"#9a3030"}}>◀</span>
               <Ico src={e.image} size={13} fallback={clsIcon(e.class,data.settings)}/>
-              <span className="tip" style={{fontSize:9,color:"#a06060",fontFamily:"Cinzel,serif",maxWidth:52,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"default"}}>
-                {e.name||"—"}<span className="tipbox">{e.name||"—"}</span>
-              </span>
+              <Tip text={e.name||"—"} style={{maxWidth:52,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:"#a06060",fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{e.name||"—"}</span></Tip>
               {elemental && <LeafIcon size={10} color="#4cba60"/>}
             </div>
           ))}
@@ -1260,19 +1236,14 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
             <div key={`t${i}`} className={highlighted?"hl":""} style={{display:"flex",flexDirection:"column",gap:2,borderRadius:2,padding:"2px 2px",transition:"all 0.2s"}}>
               <div style={{display:"flex",alignItems:"center",gap:3}}>
                 <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
-                <span className="tip" style={{fontSize:9,color:highlighted?HIGHLIGHT:(tag.color||"#a06060"),fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400,cursor:"default"}}>
-                  {tag.name}<span className="tipbox">{tag.name}</span>
-                </span>
+                <Tip text={tag.name} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:highlighted?HIGHLIGHT:(tag.color||"#a06060"),fontFamily:"'Crimson Text',serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400,display:"block"}}>{tag.name}</span></Tip>
                 {highlighted&&<span style={{fontSize:9,color:HIGHLIGHT,flexShrink:0}}>⚠</span>}
               </div>
               {roleHeroes&&roleHeroes.length>0&&(
                 <div style={{display:"flex",alignItems:"center",gap:2,paddingLeft:4}}>
                   <span style={{fontSize:8,color:"#c06060",flexShrink:0}}>◀</span>
                   {roleHeroes.map(e=>(
-                    <span key={e.id} className="tip" style={{display:"inline-flex",cursor:"default"}}>
-                      <Ico src={e.image} size={13} fallback={clsIcon(e.class,data.settings)}/>
-                      <span className="tipbox">{e.name||"—"}</span>
-                    </span>
+                    <Ico key={e.id} src={e.image} size={13} fallback={clsIcon(e.class,data.settings)}/>
                   ))}
                 </div>
               )}
@@ -1299,12 +1270,40 @@ function AChip({tag,count}){
   return(
     <div style={{display:"flex",alignItems:"center",gap:3}}>
       <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
-      <span style={{fontSize:9,color:tag.color,fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tag.name}</span>
+      <Tip text={tag.name} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:tag.color,fontFamily:"'Crimson Text',serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{tag.name}</span></Tip>
       {count>1&&<span style={{fontSize:8,color:T.gold,fontFamily:"Cinzel,serif",flexShrink:0}}>×{count}</span>}
     </div>
   );
 }
 function AEmpty(){return <span style={{fontSize:9,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>—</span>;}
+
+// Tooltip wrapper: shows full text on hover or click
+function Tip({text,children,style}){
+  const [vis,setVis]=useState(false);
+  const ref=useRef();
+  useEffect(()=>{
+    if(!vis)return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setVis(false);};
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[vis]);
+  return(
+    <span ref={ref} style={{position:"relative",...style}}
+      onMouseEnter={()=>setVis(true)} onMouseLeave={()=>setVis(false)}
+      onClick={e=>{e.stopPropagation();setVis(v=>!v);}}>
+      {children}
+      {vis&&text&&(
+        <span style={{
+          position:"absolute",bottom:"calc(100% + 4px)",left:"50%",transform:"translateX(-50%)",
+          background:"#0d1526",border:`1px solid ${T.border}`,borderRadius:3,
+          padding:"4px 8px",fontSize:10,color:T.text,fontFamily:"'Crimson Text',serif",
+          whiteSpace:"nowrap",zIndex:9999,pointerEvents:"none",
+          boxShadow:"0 4px 12px #000a",letterSpacing:0,fontWeight:400
+        }}>{text}</span>
+      )}
+    </span>
+  );
+}
 
 function Slot({idx,hero,team,isActiveTeam,active,setActive,onRemove,highlight,settings}){
   const isActive=isActiveTeam&&active.idx===idx;
@@ -1746,6 +1745,7 @@ export default function App(){
   useEffect(()=>{load().then(d=>{setData(d);setLoading(false)});},[]);
   const update=useCallback(d=>{setData(d);save(d);},[]);
 
+  // close menu on outside click
   useEffect(()=>{
     const h=e=>{if(menuRef.current&&!menuRef.current.contains(e.target))setMenuOpen(false);};
     document.addEventListener("mousedown",h);
@@ -1755,43 +1755,65 @@ export default function App(){
   if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:T.bg,color:T.gold,fontFamily:"Cinzel,serif",fontSize:13,letterSpacing:4}}>LOADING</div>;
 
   const TABS=[["draft","DRAFT"],["heroes","HEROES"],["tags","TAGS"],["settings","SETTINGS"]];
-  const TAB_LABELS={draft:"DRAFT",heroes:"HEROES",tags:"TAGS",settings:"SETTINGS"};
+  const TAB_LABELS = { draft:"DRAFT", heroes:"HEROES", tags:"TAGS", settings:"SETTINGS" };
 
   return(
     <div style={{background:T.bg,minHeight:"100vh",color:T.text,fontFamily:"'Crimson Text',serif",display:"flex",flexDirection:"column"}}>
       <style>{GS}</style>
 
       <header style={{background:T.panel,borderBottom:`1px solid ${T.border}`,padding:"0 14px",display:"flex",alignItems:"center",height:52,flexShrink:0,gap:10,overflow:"visible",position:"relative",zIndex:200}}>
+
+        {/* Title */}
         <div style={{flexShrink:0,minWidth:0}}>
           <div style={{fontFamily:"Cinzel,serif",color:T.gold,fontSize:12,letterSpacing:2,lineHeight:1.2,whiteSpace:"nowrap"}}>EPIC SEVEN · WORLD ARENA</div>
           <div style={{fontFamily:"Cinzel,serif",color:T.dim,fontSize:6.5,letterSpacing:1.5,lineHeight:1.3,whiteSpace:"nowrap"}}>FANMADE / NON-OFFICIAL</div>
         </div>
-        <div style={{flex:1,textAlign:"center",fontFamily:"Cinzel,serif",fontSize:10,color:T.sub,letterSpacing:2,whiteSpace:"nowrap"}}>{TAB_LABELS[tab]}</div>
+
+        {/* Current tab label — fills middle space */}
+        <div style={{flex:1,textAlign:"center",fontFamily:"Cinzel,serif",fontSize:10,color:T.sub,letterSpacing:2,whiteSpace:"nowrap"}}>
+          {TAB_LABELS[tab]}
+        </div>
+
+        {/* Right side: hero count + hamburger */}
         <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <span style={{fontFamily:"'Crimson Text',serif",fontSize:11,color:T.dim,whiteSpace:"nowrap"}}>{data.heroes.length} heroes</span>
+          <span style={{fontFamily:"'Crimson Text',serif",fontSize:11,color:T.dim,whiteSpace:"nowrap"}}>
+            {data.heroes.length} heroes
+          </span>
+
+          {/* Hamburger button */}
           <div ref={menuRef} style={{position:"relative"}}>
-            <button onClick={()=>setMenuOpen(v=>!v)}
-              style={{background:menuOpen?T.gold:T.card,border:`1px solid ${menuOpen?T.gold:T.border}`,color:menuOpen?T.bg:T.sub,width:38,height:38,borderRadius:4,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer",flexShrink:0,padding:0}}>
+            <button
+              onClick={()=>setMenuOpen(v=>!v)}
+              style={{background:menuOpen?T.gold:T.card,border:`1px solid ${menuOpen?T.gold:T.border}`,color:menuOpen?T.bg:T.sub,width:38,height:38,borderRadius:4,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer",flexShrink:0,padding:0}}
+            >
               {menuOpen
-                ?<span style={{fontSize:16,lineHeight:1,fontFamily:"Cinzel,serif",color:menuOpen?T.bg:T.sub}}>✕</span>
-                :<><span style={{display:"block",width:18,height:2,background:T.sub,borderRadius:1}}/><span style={{display:"block",width:18,height:2,background:T.sub,borderRadius:1}}/><span style={{display:"block",width:18,height:2,background:T.sub,borderRadius:1}}/></>
+                ? <span style={{fontSize:16,lineHeight:1,fontFamily:"Cinzel,serif",color:menuOpen?T.bg:T.sub}}>✕</span>
+                : <>
+                    <span style={{display:"block",width:18,height:2,background:T.sub,borderRadius:1}}/>
+                    <span style={{display:"block",width:18,height:2,background:T.sub,borderRadius:1}}/>
+                    <span style={{display:"block",width:18,height:2,background:T.sub,borderRadius:1}}/>
+                  </>
               }
             </button>
+
+            {/* Dropdown menu */}
             {menuOpen&&(
               <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:T.panel,border:`1px solid ${T.border}`,borderRadius:5,overflow:"hidden",boxShadow:"0 8px 32px #000a",minWidth:160,zIndex:9999}}>
                 {TABS.map(([v,l])=>(
-                  <button key={v} onClick={()=>{setTab(v);setMenuOpen(false);}}
-                    style={{display:"flex",alignItems:"center",gap:10,width:"100%",background:tab===v?T.gold+"18":"none",border:"none",borderBottom:`1px solid ${T.border}`,color:tab===v?T.gold:T.sub,padding:"13px 18px",fontFamily:"Cinzel,serif",fontSize:11,letterSpacing:1.5,cursor:"pointer",textAlign:"left",transition:"background 0.1s"}}>
+                  <button key={v} onClick={()=>{setTab(v);setMenuOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",background:tab===v?T.gold+"18":"none",border:"none",borderBottom:`1px solid ${T.border}`,color:tab===v?T.gold:T.sub,padding:"13px 18px",fontFamily:"Cinzel,serif",fontSize:11,letterSpacing:1.5,cursor:"pointer",textAlign:"left",transition:"background 0.1s"}}>
                     <span style={{fontSize:14,flexShrink:0}}>{TAB_ICONS[v]}</span>
                     <span>{l}</span>
                     {tab===v&&<span style={{marginLeft:"auto",color:T.gold,fontSize:10}}>●</span>}
                   </button>
                 ))}
-                <div style={{padding:"8px 18px",fontFamily:"'Crimson Text',serif",fontSize:10,color:T.dim}}>auto-saved</div>
+                <div style={{padding:"8px 18px",fontFamily:"'Crimson Text',serif",fontSize:10,color:T.dim}}>
+                  auto-saved
+                </div>
               </div>
             )}
           </div>
         </div>
+
       </header>
 
       <main style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
