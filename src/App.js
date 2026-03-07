@@ -464,6 +464,7 @@ const GS = `
   input,button,textarea,select{font-family:inherit;}
   .hov:hover{opacity:0.85;cursor:pointer;}
   .card-hov:hover{border-color:${T.goldDim}!important;}
+  .hero-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;align-items:stretch;}
   .syn-glow{box-shadow:0 0 0 1px #2a8050,0 0 16px #2a804466!important;}
   .ctr-glow{box-shadow:0 0 0 1px #803028,0 0 16px #80302844!important;}
   .both-glow{box-shadow:0 0 0 1px #a88020,0 0 16px #a8802044!important;}
@@ -509,7 +510,7 @@ function Pill({active,color=T.gold,onClick,children}){
 
 function Btn({onClick,children,variant="default",style:sx={}}){
   const S={default:{background:T.card,border:`1px solid ${T.border}`,color:T.sub},primary:{background:T.gold,border:"none",color:T.bg,fontWeight:600},danger:{background:"#3a0e0e",border:`1px solid #5a1a1a`,color:"#c06060"},ghost:{background:"none",border:`1px solid ${T.border}`,color:T.sub}};
-  return <button onClick={onClick} className="hov" style={{...S[variant],padding:"5px 14px",borderRadius:3,fontSize:12,fontFamily:"Cinzel,serif",letterSpacing:1,cursor:"pointer",...sx}}>{children}</button>;
+  return <button onClick={onClick} className="hov" style={{...S[variant],padding:"5px 10px",borderRadius:3,fontSize:11,fontFamily:"Cinzel,serif",letterSpacing:1,cursor:"pointer",...sx}}>{children}</button>;
 }
 
 function SortRow({sort,setSort}){
@@ -1237,9 +1238,9 @@ function HeroesView({data,onUpdate}){
         <span style={{fontSize:11,color:T.dim,fontFamily:"'Crimson Text',serif",marginLeft:4}}>{data.heroes.length} heroes</span>
         <Btn variant="primary" onClick={()=>setEdit(blankHero())} style={{marginLeft:"auto"}}>+ Add Hero</Btn>
       </div>
-      <div style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,alignContent:"start",alignItems:"stretch"}}>
+      <div className="hero-grid" style={{flex:1,overflowY:"auto",padding:"12px 16px",alignContent:"start"}}>
         {list.map(hero=>(
-          <div key={hero.id} className="card-hov" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:5,padding:"10px 11px",transition:"border-color 0.15s",display:"flex",flexDirection:"column"}}>
+          <div key={hero.id} className="card-hov" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:5,padding:"10px 11px",transition:"border-color 0.15s",display:"flex",flexDirection:"column",minHeight:0}}>
             <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"flex-start"}}>
               <Ico src={hero.image} size={52} fallback={clsIcon(hero.class,data.settings)}/>
               <div style={{flex:1,minWidth:0}}>
@@ -1248,20 +1249,18 @@ function HeroesView({data,onUpdate}){
                 <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>{hero.roles.map(r=>{const color=RC[r]||(data.roles||[]).find(x=>x.name===r)?.color||"#888";return <span key={r} style={{fontSize:8,padding:"1px 4px",borderRadius:2,background:color+"22",color}}>{r}</span>;})}</div>
               </div>
             </div>
-            {/* Middle content — grows to fill space */}
             <div style={{flex:1}}>
               {(()=>{const ur=getHeroUniqueRoles(hero,data.uniqueRoles);return ur.length>0&&<div style={{display:"flex",gap:2,flexWrap:"wrap",marginBottom:4}}>{ur.map(r=><span key={r.id} style={{fontSize:8,padding:"1px 5px",borderRadius:2,background:r.color+"22",color:r.color,border:`1px solid ${r.color}44`,display:"flex",alignItems:"center",gap:2}}><span style={{fontSize:9,lineHeight:1}}>✦</span>{r.name}</span>)}</div>;})()}
               {hero.note&&<div style={{fontSize:12,color:T.sub,fontStyle:"italic",marginBottom:6,fontFamily:"'Crimson Text',serif"}}>{hero.note}</div>}
               {hero.buffs.length>0&&<div style={{display:"flex",gap:2,flexWrap:"wrap",marginBottom:3}}>{hero.buffs.map(id=>{const b=data.buffs.find(x=>x.id===id);return b&&<span key={id} style={{fontSize:9,padding:"1px 4px",borderRadius:2,background:b.color+"22",color:b.color,fontFamily:"'Crimson Text',serif"}}>{b.name}</span>;})}</div>}
               {hero.debuffs.length>0&&<div style={{display:"flex",gap:2,flexWrap:"wrap",marginBottom:4}}>{hero.debuffs.map(id=>{const d=data.debuffs.find(x=>x.id===id);return d&&<span key={id} style={{fontSize:9,padding:"1px 4px",borderRadius:2,background:d.color+"22",color:d.color,fontFamily:"'Crimson Text',serif"}}>{d.name}</span>;})}</div>}
             </div>
-            {/* Buttons always pinned to bottom */}
-            <div style={{display:"flex",gap:5,marginTop:8,borderTop:`1px solid ${T.border}`,paddingTop:8}}>
-              <Btn onClick={()=>setEdit({...hero})}>Edit</Btn>
-              <Btn onClick={()=>doDuplicate(hero)}>Dupe</Btn>
+            <div style={{display:"flex",gap:5,paddingTop:8,marginTop:6,borderTop:`1px solid ${T.border}`,flexShrink:0,flexWrap:"wrap"}}>
+              <Btn onClick={()=>setEdit({...hero})} style={{flex:1,minWidth:60,textAlign:"center"}}>Edit</Btn>
+              <Btn onClick={()=>doDuplicate(hero)} style={{flex:1,minWidth:60,textAlign:"center"}}>Dupe</Btn>
               {delConf===hero.id
-                ?<><Btn variant="danger" onClick={()=>doDelete(hero.id)}>Confirm</Btn><Btn onClick={()=>setDelConf(null)}>Cancel</Btn></>
-                :<Btn variant="danger" onClick={e=>{e.stopPropagation();setDelConf(hero.id);}}>Delete</Btn>
+                ?<><Btn variant="danger" onClick={()=>doDelete(hero.id)} style={{flex:1,minWidth:60,textAlign:"center"}}>Confirm</Btn><Btn onClick={()=>setDelConf(null)} style={{flex:1,minWidth:60,textAlign:"center"}}>Cancel</Btn></>
+                :<Btn variant="danger" onClick={e=>{e.stopPropagation();setDelConf(hero.id);}} style={{flex:1,minWidth:60,textAlign:"center"}}>Delete</Btn>
               }
             </div>
           </div>
