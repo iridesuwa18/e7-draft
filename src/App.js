@@ -39,9 +39,9 @@ const LeafIcon = ({size=11,color="#4cba60"}) => (
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 const blankHero = () => ({ id:uid(), name:"", class:"KN", element:"fire", image:"", roles:[], buffs:[], debuffs:[], strengths:[], weaknesses:[], counters:[], strongAgainst:[], synergies:[], note:"", createdAt:Date.now() });
 const blankTag  = () => ({ id:uid(), name:"", icon:"", color:"#888888", createdAt:Date.now() });
-const blankSW   = () => ({ id:uid(), name:"", icon:"", linkedBuffs:[], linkedDebuffs:[], linkedRoles:[], createdAt:Date.now() });
+const blankSW   = () => ({ id:uid(), name:"", icon:"", linkedBuffs:[], linkedDebuffs:[], linkedRoles:[], synergizedRoles:[], teamSupportRoles:[], createdAt:Date.now() });
 const blankRole = () => ({ id:uid(), name:"", color:"#888888", createdAt:Date.now() });
-const blankUniqueRole = () => ({ id:uid(), name:"", color:"#888888", matchAll:false, linkedBuffs:[], linkedDebuffs:[], linkedStrengths:[], linkedWeaknesses:[], createdAt:Date.now() });
+const blankUniqueRole = () => ({ id:uid(), name:"", color:"#888888", matchAll:false, linkedBuffs:[], linkedDebuffs:[], linkedStrengths:[], linkedWeaknesses:[], linkedElements:[], createdAt:Date.now() });
 
 const freshData = () => ({
   version:SCHEMA_VERSION,
@@ -62,9 +62,9 @@ function migrate(raw) {
     note:h.note??"", createdAt:h.createdAt??Date.now()
   });
   const ft=t=>({ id:t.id??uid(), name:t.name??"", icon:t.icon??"", color:t.color??"#888888", createdAt:t.createdAt??Date.now() });
-  const fs=s=>({ id:s.id??uid(), name:s.name??"", icon:s.icon??"", linkedBuffs:s.linkedBuffs??[], linkedDebuffs:s.linkedDebuffs??[], linkedRoles:s.linkedRoles??[], createdAt:s.createdAt??Date.now() });
+  const fs=s=>({ id:s.id??uid(), name:s.name??"", icon:s.icon??"", linkedBuffs:s.linkedBuffs??[], linkedDebuffs:s.linkedDebuffs??[], linkedRoles:s.linkedRoles??[], synergizedRoles:s.synergizedRoles??[], teamSupportRoles:s.teamSupportRoles??[], createdAt:s.createdAt??Date.now() });
   const fr=r=>({ id:r.id??uid(), name:r.name??"", color:r.color??"#888888", createdAt:r.createdAt??Date.now() });
-  const fu=u=>({ id:u.id??uid(), name:u.name??"", color:u.color??"#888888", matchAll:u.matchAll??false, linkedBuffs:u.linkedBuffs??[], linkedDebuffs:u.linkedDebuffs??[], linkedStrengths:u.linkedStrengths??[], linkedWeaknesses:u.linkedWeaknesses??[], createdAt:u.createdAt??Date.now() });
+  const fu=u=>({ id:u.id??uid(), name:u.name??"", color:u.color??"#888888", matchAll:u.matchAll??false, linkedBuffs:u.linkedBuffs??[], linkedDebuffs:u.linkedDebuffs??[], linkedStrengths:u.linkedStrengths??[], linkedWeaknesses:u.linkedWeaknesses??[], linkedElements:u.linkedElements??[], createdAt:u.createdAt??Date.now() });
   d = {
     version: SCHEMA_VERSION,
     heroes:   (d.heroes??[]).map(fh),
@@ -87,6 +87,7 @@ function getHeroUniqueRoles(hero, uniqueRoles) {
       ...(ur.linkedDebuffs||[]).map(id=>(hero.debuffs||[]).includes(id)),
       ...(ur.linkedStrengths||[]).map(id=>(hero.strengths||[]).includes(id)),
       ...(ur.linkedWeaknesses||[]).map(id=>(hero.weaknesses||[]).includes(id)),
+      ...(ur.linkedElements||[]).map(el=>hero.element===el),
     ];
     if(checks.length===0) return false;
     return ur.matchAll ? checks.every(Boolean) : checks.some(Boolean);
@@ -646,7 +647,87 @@ function SearchDropdown({label,items,sel,onToggle,color=T.gold}){
   );
 }
 
-/* ═══ HERO PICKER MODAL ═══ */
+/* ═══ ROLES DROPDOWN (searchable + select-all) ═══ */
+function RolesDropdown({label,infoText,roles,sel,onToggle,color=T.gold}){
+  const [search,setSearch]=useState("");
+  const [open,setOpen]=useState(false);
+  const ref=useRef();
+  useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
+  const filtered=roles.filter(r=>!search||(r.name||"").toLowerCase().includes(search.toLowerCase()));
+  const allSelected=filtered.length>0&&filtered.every(r=>sel.includes(r.id));
+  const selNames=sel.map(id=>roles.find(r=>r.id===id)?.name).filter(Boolean);
+  function toggleAll(){
+    if(allSelected){filtered.forEach(r=>{if(sel.includes(r.id))onToggle(r.id);});}
+    else{filtered.forEach(r=>{if(!sel.includes(r.id))onToggle(r.id);});}
+  }
+  return(
+    <Field label={
+      <span style={{display:"flex",alignItems:"center",gap:5}}>
+        {label}
+        {infoText&&<InfoTip text={infoText}/>}
+      </span>
+    }>
+      <div ref={ref} style={{position:"relative"}}>
+        <div onClick={()=>setOpen(v=>!v)} className="hov" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:3,padding:"6px 10px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",minHeight:34}}>
+          {selNames.length===0
+            ?<span style={{color:T.dim,fontSize:12,fontFamily:"'Crimson Text',serif",fontStyle:"italic"}}>None — click to browse</span>
+            :<div style={{display:"flex",gap:3,flexWrap:"wrap",flex:1}}>{selNames.map((n,i)=>{const r=roles.find(x=>x.name===n);return <span key={i} style={{fontSize:11,padding:"1px 6px",borderRadius:2,background:(r?.color||color)+"22",color:r?.color||color,fontFamily:"'Crimson Text',serif",display:"flex",alignItems:"center",gap:2}}>{r?.isUnique&&<span style={{fontSize:9}}>✦</span>}{n}</span>;})}</div>
+          }
+          <span style={{color:T.dim,fontSize:10,flexShrink:0}}>{open?"▲":"▼"}</span>
+        </div>
+        {open&&(
+          <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:1000,background:T.panel,border:`1px solid ${T.border}`,borderRadius:3,maxHeight:200,overflowY:"auto",boxShadow:"0 8px 24px #0008"}}>
+            <div style={{padding:"5px 8px",borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,background:T.panel,display:"flex",gap:6,alignItems:"center"}}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search roles…" style={{...INP,fontSize:11,flex:1}} autoFocus/>
+              {filtered.length>0&&(
+                <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",fontSize:10,color:T.sub,fontFamily:"'Crimson Text',serif",whiteSpace:"nowrap",userSelect:"none",flexShrink:0}}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{accentColor:color,width:12,height:12}}/>
+                  All
+                </label>
+              )}
+            </div>
+            {filtered.length===0&&<div style={{padding:"10px",color:T.dim,fontSize:12,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>No matches</div>}
+            {filtered.map(r=>{
+              const active=sel.includes(r.id);
+              return(
+                <div key={r.id} onClick={()=>onToggle(r.id)} className="hov" style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:active?(r.color||color)+"18":undefined,borderBottom:`1px solid ${T.border}22`,cursor:"pointer"}}>
+                  <div style={{width:13,height:13,border:`1px solid ${active?r.color||color:T.border}`,borderRadius:2,background:active?r.color||color:undefined,flexShrink:0}}/>
+                  <span style={{fontSize:12,color:active?r.color||color:T.text,fontFamily:"'Crimson Text',serif",flex:1,display:"flex",alignItems:"center",gap:3}}>{r.isUnique&&<span style={{fontSize:10,color:r.color||color}}>✦</span>}{r.name||"(unnamed)"}</span>
+                  {active&&<span style={{color:r.color||color,fontSize:10}}>✓</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Field>
+  );
+}
+
+// Small inline info tooltip for (i) icons
+function InfoTip({text}){
+  const [vis,setVis]=useState(false);
+  const [pos,setPos]=useState(null);
+  const ref=useRef();
+  function show(){
+    if(!ref.current)return;
+    const r=ref.current.getBoundingClientRect();
+    setPos({x:Math.round(r.left+r.width/2),y:Math.round(r.top-8)});
+    setVis(true);
+  }
+  function hide(){setVis(false);setPos(null);}
+  return(
+    <span ref={ref} onMouseEnter={show} onMouseLeave={hide}
+      style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:14,height:14,borderRadius:"50%",background:T.border,color:T.sub,fontSize:9,fontFamily:"Cinzel,serif",cursor:"default",flexShrink:0,userSelect:"none"}}>
+      i
+      {vis&&pos&&(
+        <span style={{position:"fixed",left:pos.x,top:pos.y,transform:"translate(-50%,-100%)",background:"#0d1526",border:"1px solid #1a2d42",borderRadius:4,padding:"6px 10px",fontSize:11,color:"#cdc5b0",fontFamily:"'Crimson Text',serif",whiteSpace:"pre-wrap",zIndex:99999,pointerEvents:"none",boxShadow:"0 4px 16px #000c",maxWidth:280,lineHeight:1.6}}>
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
 function HeroPickerModal({title,heroes,selected,onSave,onClose,settings}){
   const [sort,setSort]=useState("az");
   const [search,setSearch]=useState("");
@@ -805,7 +886,8 @@ function HeroModal({hero,data,onSave,onClose}){
 /* ═══ TAG MODAL ═══ */
 function TagModal({type,tag,data,onSave,onClose}){
   const isStrWk=type==="strengths"||type==="weaknesses";
-  const [f,setF]=useState({...tag,linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])]});
+  const isStr=type==="strengths";
+  const [f,setF]=useState({...tag,linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])],linkedRoles:[...(tag.linkedRoles||[])],synergizedRoles:[...(tag.synergizedRoles||[])],teamSupportRoles:[...(tag.teamSupportRoles||[])]});
   const togL=(field,id)=>setF(x=>({...x,[field]:x[field].includes(id)?x[field].filter(v=>v!==id):[...x[field],id]}));
   const allImages=useMemo(()=>[
     ...data.heroes.map(h=>h.image),
@@ -816,55 +898,62 @@ function TagModal({type,tag,data,onSave,onClose}){
     ...Object.values(data.settings?.classIcons||{}),
     ...Object.values(data.settings?.elementIcons||{}),
   ].filter(Boolean),[data]);
-  // All available roles (default + custom + unique roles)
   const allRoles=useMemo(()=>[
     ...DEFAULT_ROLES.map(name=>({id:name,name,color:RC[name]||"#888888",isUnique:false})),
     ...(data.roles||[]).filter(r=>r.name&&!DEFAULT_ROLES.includes(r.name)).map(r=>({...r,isUnique:false})),
     ...(data.uniqueRoles||[]).map(r=>({...r,isUnique:true})),
   ],[data.roles,data.uniqueRoles]);
+
+  // Info tooltip texts
+  const INFO = {
+    strDebuff: "e.g. \"Immune to Stun\" + link Stun debuff\n→ Lights up in draft if an enemy hero carries Stun.",
+    strBuff:   "e.g. \"DMG proportional to ATK\" + link Increased Attack buff\n→ Lights up if your own team has Increased Attack.",
+    strRoles:  "e.g. \"Extra Turn when someone Counters\" + link Counter role\n→ Highlights strength against enemies who have the Counter role.\ne.g. \"CR increase when ally heals\" + link Healer role\n→ Highlights vs enemies with a Healer.",
+    strSyn:    "e.g. \"Benefits from CR Decrease\" + link Decrease CR unique role\n→ In draft, shows a SYNERGY pair if a teammate carries that unique role.\nPerfect for abilities that need a specific ally to enable them.",
+    wkDebuff:  "e.g. \"Cannot counterattack\" + link Stun debuff\n→ Lights up as a risk if the enemy can apply Stun.",
+    wkBuff:    "e.g. \"Cannot gain Immortality\" + link Immortality buff\n→ Lights up if your own team has Immortality, since it's wasted on this hero.",
+    wkRoles:   "e.g. \"Weak to Light\" + link Light Heroes unique role\n→ Exposed when an enemy with that role (e.g. a Light element hero) is present.\nTip: create a Unique Role tied to an element for this.",
+    wkSupport: "e.g. \"Cannot counterattack\" + link Shielder / Healer role\n→ If a teammate with that role is on your team, shows as team support\n(someone is covering your weakness).",
+  };
+
   return(
-    <Modal title={`${tag.id?"Edit":"New"} ${type==="strengths"?"Strength":type==="weaknesses"?"Weakness":type==="buffs"?"Buff":"Debuff"}`} onClose={onClose} width={500}>
+    <Modal title={`${tag.id?"Edit":"New"} ${isStr?"Strength":type==="weaknesses"?"Weakness":type==="buffs"?"Buff":"Debuff"}`} onClose={onClose} width={520}>
       <Field label="NAME"><input value={f.name} onChange={e=>setF(x=>({...x,name:e.target.value}))} placeholder="Tag name…" style={INP} autoFocus/></Field>
       <Field label="ICON / IMAGE"><ImagePicker value={f.icon} onChange={v=>setF(x=>({...x,icon:v}))} allImages={allImages}/></Field>
       {!isStrWk&&<Field label="COLOR"><ColorPicker value={f.color||"#888888"} onChange={v=>setF(x=>({...x,color:v}))}/></Field>}
       {isStrWk&&<Field label="TEXT COLOR"><ColorPicker value={f.color||"#888888"} onChange={v=>setF(x=>({...x,color:v}))}/></Field>}
       {isStrWk&&(
         <>
-          <div style={{fontSize:12,color:T.sub,marginBottom:10,fontFamily:"'Crimson Text',serif",lineHeight:1.7,background:T.card,border:`1px solid ${T.border}`,borderRadius:3,padding:"8px 10px"}}>
-            <span style={{fontFamily:"Cinzel,serif",fontSize:9,color:T.gold,letterSpacing:1,display:"block",marginBottom:4}}>HOW LINKING WORKS</span>
-            <span style={{color:"#5aaa70"}}>Strength + debuff link</span> → activates when the <em>enemy</em> carries that debuff.<br/>
-            <span style={{color:"#5aaa70"}}>Strength + buff link</span> → activates when <em>your</em> team has that buff.<br/>
-            <span style={{color:"#5aaa70"}}>Strength + role link</span> → activates when the <em>enemy</em> has a hero with that role.<br/>
-            <span style={{color:"#c06060"}}>Weakness + debuff link</span> → exposed when the <em>enemy</em> applies that debuff.<br/>
-            <span style={{color:"#c06060"}}>Weakness + buff link</span> → exposed when <em>your</em> team has that buff (it's countered).<br/>
-            <span style={{color:"#c06060"}}>Weakness + role link</span> → exposed when the <em>enemy</em> has a hero with that role.
-          </div>
           <SearchDropdown
-            label={type==="strengths"?"LINKED DEBUFFS — enemy must carry this":"LINKED DEBUFFS — enemy applies this to exploit weakness"}
+            label={<span style={{display:"flex",alignItems:"center",gap:5}}>{isStr?"LINKED DEBUFFS — enemy must carry this":"LINKED DEBUFFS — enemy applies this to exploit weakness"}<InfoTip text={isStr?INFO.strDebuff:INFO.wkDebuff}/></span>}
             items={data.debuffs} sel={f.linkedDebuffs} onToggle={v=>togL("linkedDebuffs",v)} color="#a82860"
           />
           <SearchDropdown
-            label={type==="strengths"?"LINKED BUFFS — your team must have this":"LINKED BUFFS — your team has this but weakness nullifies it"}
+            label={<span style={{display:"flex",alignItems:"center",gap:5}}>{isStr?"LINKED BUFFS — your team must have this":"LINKED BUFFS — your team has this but weakness nullifies it"}<InfoTip text={isStr?INFO.strBuff:INFO.wkBuff}/></span>}
             items={data.buffs} sel={f.linkedBuffs} onToggle={v=>togL("linkedBuffs",v)} color="#208888"
           />
-          <Field label={type==="strengths"?"LINKED ROLES — strong against enemies with these roles":"LINKED ROLES — weak against enemies with these roles"}>
-            <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-              {allRoles.map(r=>{
-                const active=(f.linkedRoles||[]).includes(r.id);
-                return(
-                  <button key={r.id} onClick={()=>togL("linkedRoles",r.id)} className="hov"
-                    style={{background:active?r.color+"33":T.card,border:`1px solid ${active?r.color:T.border}`,color:active?r.color:T.sub,padding:"3px 10px",borderRadius:3,fontSize:11,fontFamily:"'Crimson Text',serif",cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
-                    {r.isUnique&&<span style={{fontSize:10}}>✦</span>}{r.name}
-                  </button>
-                );
-              })}
-            </div>
-            {(f.linkedRoles||[]).length>0&&(
-              <div style={{fontSize:10,color:T.dim,fontFamily:"'Crimson Text',serif",marginTop:4}}>
-                {(f.linkedRoles||[]).map(id=>allRoles.find(r=>r.id===id)?.name).filter(Boolean).join(", ")}
-              </div>
-            )}
-          </Field>
+          <RolesDropdown
+            label={isStr?"LINKED ROLES — strong against enemies with these roles":"LINKED ROLES — weak against enemies with these roles"}
+            infoText={isStr?INFO.strRoles:INFO.wkRoles}
+            roles={allRoles} sel={f.linkedRoles||[]} onToggle={v=>togL("linkedRoles",v)}
+            color={isStr?"#3a9a60":"#9a3030"}
+          />
+          {isStr&&(
+            <RolesDropdown
+              label="SYNERGIZED ROLES — synergizes with teammates who have these roles"
+              infoText={INFO.strSyn}
+              roles={allRoles} sel={f.synergizedRoles||[]} onToggle={v=>togL("synergizedRoles",v)}
+              color="#208888"
+            />
+          )}
+          {!isStr&&(
+            <RolesDropdown
+              label="TEAM SUPPORT ROLES — covered by teammates with these roles"
+              infoText={INFO.wkSupport}
+              roles={allRoles} sel={f.teamSupportRoles||[]} onToggle={v=>togL("teamSupportRoles",v)}
+              color="#5890a8"
+            />
+          )}
         </>
       )}
       <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
@@ -989,10 +1078,54 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
     const p=[];
     for(let i=0;i<teammates.length;i++)for(let j=i+1;j<teammates.length;j++){
       const a=teammates[i],b=teammates[j];
-      if((a.synergies||[]).includes(b.id)||(b.synergies||[]).includes(a.id))p.push([a,b]);
+      if((a.synergies||[]).includes(b.id)||(b.synergies||[]).includes(a.id))p.push([a,b,"syn"]);
     }
     return p;
   },[team]);
+
+  // Synergized Roles: hero with a strength that has synergizedRoles ✦ teammate who has that role
+  const synRolePairs=useMemo(()=>{
+    const p=[];
+    teammates.forEach(hero=>{
+      (hero.strengths||[]).forEach(sid=>{
+        const s=data.strengths.find(x=>x.id===sid);
+        if(!s||(s.synergizedRoles||[]).length===0)return;
+        teammates.forEach(ally=>{
+          if(ally.id===hero.id)return;
+          const allyAllRoles=[...(ally.roles||[]),...getHeroUniqueRoles(ally,data.uniqueRoles).map(r=>r.id)];
+          const matches=(s.synergizedRoles||[]).some(rid=>allyAllRoles.includes(rid));
+          if(matches){
+            const key=`${hero.id}:${ally.id}:${sid}`;
+            if(!p.find(x=>x.key===key))
+              p.push({key,hero,ally,strengthName:s.name,strengthColor:s.color||"#5aaa70"});
+          }
+        });
+      });
+    });
+    return p;
+  },[team,data.strengths,data.uniqueRoles]);
+
+  // Team Support Roles: hero with a weakness that has teamSupportRoles → teammate who has that role
+  const teamSupportPairs=useMemo(()=>{
+    const p=[];
+    teammates.forEach(hero=>{
+      (hero.weaknesses||[]).forEach(wid=>{
+        const w=data.weaknesses.find(x=>x.id===wid);
+        if(!w||(w.teamSupportRoles||[]).length===0)return;
+        teammates.forEach(ally=>{
+          if(ally.id===hero.id)return;
+          const allyAllRoles=[...(ally.roles||[]),...getHeroUniqueRoles(ally,data.uniqueRoles).map(r=>r.id)];
+          const matches=(w.teamSupportRoles||[]).some(rid=>allyAllRoles.includes(rid));
+          if(matches){
+            const key=`${hero.id}:${ally.id}:${wid}`;
+            if(!p.find(x=>x.key===key))
+              p.push({key,hero,ally,weaknessName:w.name,weaknessColor:w.color||"#c06060"});
+          }
+        });
+      });
+    });
+    return p;
+  },[team,data.weaknesses,data.uniqueRoles]);
 
   // STRENGTHS: hero ▶ enemy pairs + highlighted tags
   const strengthData=useMemo(()=>{
@@ -1186,7 +1319,17 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
               <Tip text={b.name||"—"} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{b.name||"—"}</span></Tip>
             </div>
           ))}
-          {synPairs.length===0&&<AEmpty/>}
+          {synRolePairs.map(({key,hero,ally,strengthName,strengthColor})=>(
+            <div key={key} style={{display:"flex",alignItems:"center",gap:3}}>
+              <Ico src={hero.image} size={13} fallback={clsIcon(hero.class,data.settings)}/>
+              <Tip text={hero.name||"—"} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{hero.name||"—"}</span></Tip>
+              <span style={{fontSize:8,color:"#208888"}}>✦</span>
+              <Ico src={ally.image} size={13} fallback={clsIcon(ally.class,data.settings)}/>
+              <Tip text={ally.name||"—"} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:"#88cccc",fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{ally.name||"—"}</span></Tip>
+              <Tip text={strengthName} style={{maxWidth:38,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:7,color:strengthColor,fontFamily:"'Crimson Text',serif",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{strengthName}</span></Tip>
+            </div>
+          ))}
+          {synPairs.length===0&&synRolePairs.length===0&&<AEmpty/>}
         </ASection>
 
         <ASection title="STRENGTHS" color="#3a9a60">
@@ -1250,6 +1393,20 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
             </div>
           ))}
           {weaknessData.pairs.length===0&&weaknessData.tags.length===0&&<AEmpty/>}
+        </ASection>
+
+        <ASection title="TEAM SUPPORT" color="#5890a8">
+          {teamSupportPairs.map(({key,hero,ally,weaknessName,weaknessColor})=>(
+            <div key={key} style={{display:"flex",alignItems:"center",gap:3}}>
+              <Ico src={hero.image} size={13} fallback={clsIcon(hero.class,data.settings)}/>
+              <Tip text={hero.name||"—"} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:T.text,fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{hero.name||"—"}</span></Tip>
+              <span style={{fontSize:8,color:"#5890a8"}}>🛡</span>
+              <Ico src={ally.image} size={13} fallback={clsIcon(ally.class,data.settings)}/>
+              <Tip text={ally.name||"—"} style={{flex:1,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:9,color:"#88aacc",fontFamily:"Cinzel,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{ally.name||"—"}</span></Tip>
+              <Tip text={weaknessName} style={{maxWidth:38,overflow:"hidden",display:"inline-block"}}><span style={{fontSize:7,color:weaknessColor,fontFamily:"'Crimson Text',serif",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{weaknessName}</span></Tip>
+            </div>
+          ))}
+          {teamSupportPairs.length===0&&<AEmpty/>}
         </ASection>
 
       </div>
@@ -1415,16 +1572,15 @@ function HeroesView({data,onUpdate}){
 
 /* ═══ UNIQUE ROLE MODAL ═══ */
 function UniqueRoleModal({ur,data,onSave,onClose}){
-  const [f,setF]=useState({...ur,linkedBuffs:[...(ur.linkedBuffs||[])],linkedDebuffs:[...(ur.linkedDebuffs||[])],linkedStrengths:[...(ur.linkedStrengths||[])],linkedWeaknesses:[...(ur.linkedWeaknesses||[])]});
+  const [f,setF]=useState({...ur,linkedBuffs:[...(ur.linkedBuffs||[])],linkedDebuffs:[...(ur.linkedDebuffs||[])],linkedStrengths:[...(ur.linkedStrengths||[])],linkedWeaknesses:[...(ur.linkedWeaknesses||[])],linkedElements:[...(ur.linkedElements||[])]});
   const tog=(field,id)=>setF(x=>({...x,[field]:x[field].includes(id)?x[field].filter(v=>v!==id):[...x[field],id]}));
-  // All available roles (default + custom + unique) for linking in strengths/weaknesses
-  const allRoles=useMemo(()=>[
-    ...DEFAULT_ROLES.map(name=>({id:name,name,color:RC[name]||"#888888"})),
-    ...(data.roles||[]).filter(r=>r.name&&!DEFAULT_ROLES.includes(r.name)),
-    ...(data.uniqueRoles||[]).filter(r=>r.id!==ur.id).map(r=>({...r,isUnique:true})),
-  ],[data.roles,data.uniqueRoles]);
+  const [roleSearch,setRoleSearch]=useState({buffs:"",debuffs:"",strengths:"",weaknesses:""});
+
+  // Roles search for the Tags section in Tags view (separate from this modal)
+  const allRolesSearch=useState("")[0];
+
   return(
-    <Modal title={`${ur.id&&(data.uniqueRoles||[]).some(x=>x.id===ur.id)?"Edit":"New"} Unique Role`} onClose={onClose} width={520}>
+    <Modal title={`${ur.id&&(data.uniqueRoles||[]).some(x=>x.id===ur.id)?"Edit":"New"} Unique Role`} onClose={onClose} width={540}>
       <div style={{display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
         <div style={{flex:1}}><Field label="NAME"><input value={f.name} onChange={e=>setF(x=>({...x,name:e.target.value}))} placeholder="Unique role name…" style={INP} autoFocus/></Field></div>
         <Field label="COLOR">
@@ -1444,6 +1600,20 @@ function UniqueRoleModal({ur,data,onSave,onClose}){
         </div>
         <div style={{fontSize:11,color:T.dim,fontFamily:"'Crimson Text',serif",marginTop:4}}>
           {f.matchAll?"Hero must have ALL linked items to qualify.":"Hero qualifies if they have ANY ONE of the linked items."}
+        </div>
+      </Field>
+      {/* ELEMENTS */}
+      <Field label={<span style={{display:"flex",alignItems:"center",gap:5}}>LINKED ELEMENTS<InfoTip text={"Any hero of this element will automatically qualify for this unique role.\ne.g. Link 'Light' to create a 'Light Heroes' role — useful for weakness linking."}/></span>}>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+          {Object.entries(EL_META).map(([k,v])=>{
+            const active=(f.linkedElements||[]).includes(k);
+            return(
+              <button key={k} onClick={()=>tog("linkedElements",k)} className="hov"
+                style={{background:active?v.color+"33":T.card,border:`1px solid ${active?v.color:T.border}`,color:active?v.color:T.sub,padding:"3px 10px",borderRadius:3,fontSize:11,fontFamily:"'Crimson Text',serif",display:"flex",alignItems:"center",gap:4}}>
+                <Ico src={data.settings?.elementIcons?.[k]||""} size={12} fallback={elIcon(k,data.settings)}/>{v.label}
+              </button>
+            );
+          })}
         </div>
       </Field>
       <SearchDropdown label="LINKED BUFFS" items={data.buffs} sel={f.linkedBuffs} onToggle={v=>tog("linkedBuffs",v)} color="#208888"/>
@@ -1468,6 +1638,27 @@ function TagsView({data,onUpdate}){
   const [roleDelConf,setRoleDelConf]=useState(null);
   const [uniqueRoleEdit,setUniqueRoleEdit]=useState(null);
   const [uniqueRoleDelConf,setUniqueRoleDelConf]=useState(null);
+  const [roleSearch,setRoleSearch]=useState("");
+  const [uniqueRoleSearch,setUniqueRoleSearch]=useState("");
+  // multi-select for roles and uniqueRoles
+  const [roleSelected,setRoleSelected]=useState(new Set());
+  const [urSelected,setUrSelected]=useState(new Set());
+  const [roleBulkMode,setRoleBulkMode]=useState(null);
+  const [urBulkMode,setUrBulkMode]=useState(null);
+  const [roleBulkColor,setRoleBulkColor]=useState("#888888");
+  const [urBulkColor,setUrBulkColor]=useState("#888888");
+
+  function toggleRoleSel(id){setRoleSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});}
+  function toggleRoleSelAll(ids){setRoleSelected(s=>{const allSel=ids.every(id=>s.has(id));return allSel?new Set():new Set(ids);});}
+  function clearRoleSel(){setRoleSelected(new Set());setRoleBulkMode(null);}
+  function applyRoleBulkColor(){const roles=(data.roles||[]).map(r=>roleSelected.has(r.id)?{...r,color:roleBulkColor}:r);onUpdate({...data,roles});addToPalette(roleBulkColor);clearRoleSel();}
+  function applyRoleBulkDelete(){onUpdate({...data,roles:(data.roles||[]).filter(r=>!roleSelected.has(r.id))});clearRoleSel();}
+
+  function toggleUrSel(id){setUrSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});}
+  function toggleUrSelAll(ids){setUrSelected(s=>{const allSel=ids.every(id=>s.has(id));return allSel?new Set():new Set(ids);});}
+  function clearUrSel(){setUrSelected(new Set());setUrBulkMode(null);}
+  function applyUrBulkColor(){const uniqueRoles=(data.uniqueRoles||[]).map(r=>urSelected.has(r.id)?{...r,color:urBulkColor}:r);onUpdate({...data,uniqueRoles});addToPalette(urBulkColor);clearUrSel();}
+  function applyUrBulkDelete(){onUpdate({...data,uniqueRoles:(data.uniqueRoles||[]).filter(r=>!urSelected.has(r.id))});clearUrSel();}
   // multi-select per section: {buffs:Set, debuffs:Set, strengths:Set, weaknesses:Set}
   const [selected,setSelected]=useState({buffs:new Set(),debuffs:new Set(),strengths:new Set(),weaknesses:new Set()});
   // bulk action mode per section: null | "color" | "delete"
@@ -1531,23 +1722,67 @@ function TagsView({data,onUpdate}){
           {DEFAULT_ROLES.map(r=><span key={r} style={{fontSize:10,padding:"2px 8px",borderRadius:3,background:RC[r]+"22",border:`1px solid ${RC[r]}55`,color:RC[r],fontFamily:"'Crimson Text',serif"}}>{r}</span>)}
           <span style={{fontSize:10,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",alignSelf:"center",marginLeft:4}}>built-in</span>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          {(data.roles||[]).length===0&&<span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",padding:"4px 0"}}>No custom roles yet.</span>}
-          {(data.roles||[]).map(role=>(
-            <div key={role.id} style={{background:T.card,border:`1px solid ${role.color||"#888"}33`,borderRadius:4,padding:"6px 10px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{width:14,height:14,borderRadius:2,background:role.color||"#888",display:"inline-block",flexShrink:0}}/>
-              <span style={{flex:1,fontSize:12,color:role.color||T.text,fontFamily:"Cinzel,serif"}}>{role.name||<span style={{color:T.dim,fontStyle:"italic"}}>Unnamed</span>}</span>
-              <div style={{display:"flex",gap:4,flexShrink:0}}>
-                <Btn onClick={()=>setRoleEdit({...role})}>Edit</Btn>
-                <Btn onClick={()=>dupeRole(role)}>Dupe</Btn>
-                {roleDelConf===role.id
-                  ?<><Btn variant="danger" onClick={()=>deleteRole(role.id)}>Confirm</Btn><Btn onClick={()=>setRoleDelConf(null)}>Cancel</Btn></>
-                  :<Btn variant="danger" onClick={()=>setRoleDelConf(role.id)}>Delete</Btn>
-                }
+        <input value={roleSearch} onChange={e=>setRoleSearch(e.target.value)} placeholder="Search custom roles…" style={{...INP,fontSize:11,width:220,marginBottom:8}}/>
+        {(()=>{
+          const filtered=(data.roles||[]).filter(r=>!roleSearch||(r.name||"").toLowerCase().includes(roleSearch.toLowerCase()));
+          const filteredIds=filtered.map(r=>r.id);
+          const allChecked=filteredIds.length>0&&filteredIds.every(id=>roleSelected.has(id));
+          return(
+            <>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
+                {filtered.length>0&&(
+                  <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",userSelect:"none"}}>
+                    <input type="checkbox" checked={allChecked} onChange={()=>toggleRoleSelAll(filteredIds)} style={{accentColor:T.gold,width:13,height:13,cursor:"pointer"}}/>
+                    Select all
+                  </label>
+                )}
+                {roleSelected.size>0&&!roleBulkMode&&(
+                  <div style={{display:"flex",gap:5,marginLeft:"auto"}}>
+                    <span style={{fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",alignSelf:"center"}}>{roleSelected.size} selected</span>
+                    <Btn onClick={()=>setRoleBulkMode("color")}>Change Colour</Btn>
+                    <Btn variant="danger" onClick={()=>setRoleBulkMode("delete")}>Delete</Btn>
+                    <Btn onClick={clearRoleSel}>Cancel</Btn>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
+              {roleBulkMode==="color"&&(
+                <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:4,padding:"10px 12px",marginBottom:8}}>
+                  <div style={{fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",marginBottom:6}}>Set colour for {roleSelected.size} selected role{roleSelected.size>1?"s":""}:</div>
+                  <ColorPicker value={roleBulkColor} onChange={v=>setRoleBulkColor(v)}/>
+                  <div style={{display:"flex",gap:6,marginTop:8}}>
+                    <Btn variant="primary" onClick={applyRoleBulkColor}>Apply to {roleSelected.size} role{roleSelected.size>1?"s":""}</Btn>
+                    <Btn onClick={clearRoleSel}>Cancel</Btn>
+                  </div>
+                </div>
+              )}
+              {roleBulkMode==="delete"&&(
+                <div style={{background:"#2a0e0e",border:`1px solid #5a1a1a`,borderRadius:4,padding:"10px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                  <span style={{fontSize:12,color:"#c06060",fontFamily:"'Crimson Text',serif",flex:1}}>Delete {roleSelected.size} selected role{roleSelected.size>1?"s":""}? This cannot be undone.</span>
+                  <Btn variant="danger" onClick={applyRoleBulkDelete}>Confirm Delete</Btn>
+                  <Btn onClick={clearRoleSel}>Cancel</Btn>
+                </div>
+              )}
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {filtered.length===0&&<span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",padding:"4px 0"}}>{(data.roles||[]).length===0?"No custom roles yet.":"No matches."}</span>}
+                {filtered.map(role=>(
+                  <div key={role.id} style={{background:roleSelected.has(role.id)?T.gold+"18":T.card,border:`1px solid ${roleSelected.has(role.id)?T.gold:role.color||"#888"}33`,borderRadius:4,padding:"6px 10px",display:"flex",alignItems:"center",gap:8,transition:"background 0.1s"}}>
+                    <input type="checkbox" checked={roleSelected.has(role.id)} onChange={()=>toggleRoleSel(role.id)} style={{accentColor:T.gold,width:13,height:13,cursor:"pointer",flexShrink:0}}/>
+                    <span style={{width:14,height:14,borderRadius:2,background:role.color||"#888",display:"inline-block",flexShrink:0}}/>
+                    <span style={{flex:1,fontSize:12,color:role.color||T.text,fontFamily:"Cinzel,serif"}}>{role.name||<span style={{color:T.dim,fontStyle:"italic"}}>Unnamed</span>}</span>
+                    <div style={{display:"flex",gap:4,flexShrink:0}}>
+                      <Btn onClick={()=>setRoleEdit({...role})}>Edit</Btn>
+                      <Btn onClick={()=>dupeRole(role)}>Dupe</Btn>
+                      {roleDelConf===role.id
+                        ?<><Btn variant="danger" onClick={()=>deleteRole(role.id)}>Confirm</Btn><Btn onClick={()=>setRoleDelConf(null)}>Cancel</Btn></>
+                        :<Btn variant="danger" onClick={()=>setRoleDelConf(role.id)}>Delete</Btn>
+                      }
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()}
         {roleEdit&&(
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:4,padding:"10px 12px",marginTop:8,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <input value={roleEdit.name} onChange={e=>setRoleEdit(r=>({...r,name:e.target.value}))} placeholder="Role name…" style={{...INP,width:160}} autoFocus/>
@@ -1564,18 +1799,59 @@ function TagsView({data,onUpdate}){
       <div style={{marginBottom:28}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
           <span style={{fontFamily:"Cinzel,serif",fontSize:10,color:T.gold,letterSpacing:2}}>UNIQUE ROLES</span>
-          <span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>Auto-assigned to heroes based on their buffs, debuffs, strengths and weaknesses</span>
+          <span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>Auto-assigned to heroes based on their buffs, debuffs, strengths, weaknesses or element</span>
           <Btn onClick={()=>setUniqueRoleEdit(blankUniqueRole())} style={{marginLeft:"auto"}}>+ Add</Btn>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          {(data.uniqueRoles||[]).length===0&&<span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",padding:"4px 0"}}>No unique roles yet.</span>}
-          {(data.uniqueRoles||[]).map(ur=>(
-            <div key={ur.id} style={{background:T.card,border:`1px solid ${ur.color||"#888"}33`,borderRadius:4,padding:"8px 10px"}}>
+        <input value={uniqueRoleSearch} onChange={e=>setUniqueRoleSearch(e.target.value)} placeholder="Search unique roles…" style={{...INP,fontSize:11,width:220,marginBottom:8}}/>
+        {(()=>{
+          const filtered=(data.uniqueRoles||[]).filter(ur=>!uniqueRoleSearch||(ur.name||"").toLowerCase().includes(uniqueRoleSearch.toLowerCase()));
+          const filteredIds=filtered.map(ur=>ur.id);
+          const allChecked=filteredIds.length>0&&filteredIds.every(id=>urSelected.has(id));
+          return(
+            <>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
+                {filtered.length>0&&(
+                  <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",userSelect:"none"}}>
+                    <input type="checkbox" checked={allChecked} onChange={()=>toggleUrSelAll(filteredIds)} style={{accentColor:T.gold,width:13,height:13,cursor:"pointer"}}/>
+                    Select all
+                  </label>
+                )}
+                {urSelected.size>0&&!urBulkMode&&(
+                  <div style={{display:"flex",gap:5,marginLeft:"auto"}}>
+                    <span style={{fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",alignSelf:"center"}}>{urSelected.size} selected</span>
+                    <Btn onClick={()=>setUrBulkMode("color")}>Change Colour</Btn>
+                    <Btn variant="danger" onClick={()=>setUrBulkMode("delete")}>Delete</Btn>
+                    <Btn onClick={clearUrSel}>Cancel</Btn>
+                  </div>
+                )}
+              </div>
+              {urBulkMode==="color"&&(
+                <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:4,padding:"10px 12px",marginBottom:8}}>
+                  <div style={{fontSize:11,color:T.sub,fontFamily:"'Crimson Text',serif",marginBottom:6}}>Set colour for {urSelected.size} selected unique role{urSelected.size>1?"s":""}:</div>
+                  <ColorPicker value={urBulkColor} onChange={v=>setUrBulkColor(v)}/>
+                  <div style={{display:"flex",gap:6,marginTop:8}}>
+                    <Btn variant="primary" onClick={applyUrBulkColor}>Apply to {urSelected.size} unique role{urSelected.size>1?"s":""}</Btn>
+                    <Btn onClick={clearUrSel}>Cancel</Btn>
+                  </div>
+                </div>
+              )}
+              {urBulkMode==="delete"&&(
+                <div style={{background:"#2a0e0e",border:`1px solid #5a1a1a`,borderRadius:4,padding:"10px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                  <span style={{fontSize:12,color:"#c06060",fontFamily:"'Crimson Text',serif",flex:1}}>Delete {urSelected.size} selected unique role{urSelected.size>1?"s":""}? This cannot be undone.</span>
+                  <Btn variant="danger" onClick={applyUrBulkDelete}>Confirm Delete</Btn>
+                  <Btn onClick={clearUrSel}>Cancel</Btn>
+                </div>
+              )}
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {filtered.length===0&&<span style={{fontSize:12,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif",padding:"4px 0"}}>{(data.uniqueRoles||[]).length===0?"No unique roles yet.":"No matches."}</span>}
+                {filtered.map(ur=>(
+            <div key={ur.id} style={{background:urSelected.has(ur.id)?T.gold+"18":T.card,border:`1px solid ${urSelected.has(ur.id)?T.gold:ur.color||"#888"}33`,borderRadius:4,padding:"8px 10px",transition:"background 0.1s"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <input type="checkbox" checked={urSelected.has(ur.id)} onChange={()=>toggleUrSel(ur.id)} style={{accentColor:T.gold,width:13,height:13,cursor:"pointer",flexShrink:0}}/>
                 <span style={{fontSize:11,color:"#fff",background:ur.color||"#888",padding:"1px 7px",borderRadius:2,fontFamily:"Cinzel,serif",display:"flex",alignItems:"center",gap:4}}><span>✦</span>{ur.name||<span style={{fontStyle:"italic",opacity:0.6}}>Unnamed</span>}</span>
                 <span style={{fontSize:10,color:T.dim,fontFamily:"'Crimson Text',serif"}}>{ur.matchAll?"Needs ALL linked":"Needs ANY one linked"}</span>
                 <div style={{display:"flex",gap:4,marginLeft:"auto",flexShrink:0}}>
-                  <Btn onClick={()=>setUniqueRoleEdit({...ur,linkedBuffs:[...(ur.linkedBuffs||[])],linkedDebuffs:[...(ur.linkedDebuffs||[])],linkedStrengths:[...(ur.linkedStrengths||[])],linkedWeaknesses:[...(ur.linkedWeaknesses||[])]})} >Edit</Btn>
+                  <Btn onClick={()=>setUniqueRoleEdit({...ur,linkedBuffs:[...(ur.linkedBuffs||[])],linkedDebuffs:[...(ur.linkedDebuffs||[])],linkedStrengths:[...(ur.linkedStrengths||[])],linkedWeaknesses:[...(ur.linkedWeaknesses||[])],linkedElements:[...(ur.linkedElements||[])]})} >Edit</Btn>
                   <Btn onClick={()=>onUpdate({...data,uniqueRoles:[...(data.uniqueRoles||[]),{...ur,id:uid(),name:ur.name+" (Copy)",createdAt:Date.now()}]})}>Dupe</Btn>
                   {uniqueRoleDelConf===ur.id
                     ?<><Btn variant="danger" onClick={()=>{onUpdate({...data,uniqueRoles:(data.uniqueRoles||[]).filter(r=>r.id!==ur.id)});setUniqueRoleDelConf(null);}}>Confirm</Btn><Btn onClick={()=>setUniqueRoleDelConf(null)}>Cancel</Btn></>
@@ -1588,10 +1864,14 @@ function TagsView({data,onUpdate}){
                 {(ur.linkedDebuffs||[]).map(id=>{const d=data.debuffs.find(x=>x.id===id);return d?<span key={id} style={{fontSize:9,padding:"1px 5px",borderRadius:2,background:"#a8286022",color:"#a82860"}}>{d.name}</span>:null;})}
                 {(ur.linkedStrengths||[]).map(id=>{const s=data.strengths.find(x=>x.id===id);return s?<span key={id} style={{fontSize:9,padding:"1px 5px",borderRadius:2,background:"#3a7a5022",color:"#5aaa70"}}>{s.name}</span>:null;})}
                 {(ur.linkedWeaknesses||[]).map(id=>{const w=data.weaknesses.find(x=>x.id===id);return w?<span key={id} style={{fontSize:9,padding:"1px 5px",borderRadius:2,background:"#7a303022",color:"#c06060"}}>{w.name}</span>:null;})}
+                {(ur.linkedElements||[]).map(el=><span key={el} style={{fontSize:9,padding:"1px 5px",borderRadius:2,background:EL_META[el]?.color+"22",color:EL_META[el]?.color,border:`1px solid ${EL_META[el]?.color}44`}}>{EL_META[el]?.label}</span>)}
               </div>
             </div>
           ))}
-        </div>
+              </div>
+            </>
+          );
+        })()}
         {uniqueRoleEdit&&<UniqueRoleModal ur={uniqueRoleEdit} data={data} onSave={ur=>{const arr=[...(data.uniqueRoles||[])];const i=arr.findIndex(x=>x.id===ur.id);if(i>=0)arr[i]=ur;else arr.push({...ur,id:uid(),createdAt:Date.now()});onUpdate({...data,uniqueRoles:arr});setUniqueRoleEdit(null);}} onClose={()=>setUniqueRoleEdit(null)}/>}
       </div>
 
@@ -1665,7 +1945,7 @@ function TagsView({data,onUpdate}){
                     )}
                   </div>
                   <div style={{display:"flex",gap:4,flexShrink:0}}>
-                    <Btn onClick={()=>setEdit({type:key,tag:{...tag,linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])]}})}>Edit</Btn>
+                    <Btn onClick={()=>setEdit({type:key,tag:{...tag,linkedBuffs:[...(tag.linkedBuffs||[])],linkedDebuffs:[...(tag.linkedDebuffs||[])],linkedRoles:[...(tag.linkedRoles||[])],synergizedRoles:[...(tag.synergizedRoles||[])],teamSupportRoles:[...(tag.teamSupportRoles||[])]}})} >Edit</Btn>
                     <Btn onClick={()=>doDuplicate(key,tag)}>Dupe</Btn>
                     {delConf===tag.id
                       ?<><Btn variant="danger" onClick={()=>doDelete(key,tag.id)}>Confirm</Btn><Btn onClick={()=>setDelConf(null)}>Cancel</Btn></>
