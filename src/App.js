@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 
 /* ═══════════════════════════════════════════  CONSTANTS  ═══ */
 const SCHEMA_VERSION = 2;
@@ -1277,28 +1277,53 @@ function AChip({tag,count}){
 }
 function AEmpty(){return <span style={{fontSize:9,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>—</span>;}
 
-// Tooltip wrapper: shows full text on hover or click
+// Tooltip: only activates when inner text is actually truncated (scrollWidth > offsetWidth)
 function Tip({text,children,style}){
-  const [vis,setVis]=useState(false);
+  const [pos,setPos]=useState(null);
+  const innerRef=useRef();
   const ref=useRef();
-  useEffect(()=>{
-    if(!vis)return;
-    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setVis(false);};
-    document.addEventListener("mousedown",h);
-    return()=>document.removeEventListener("mousedown",h);
-  },[vis]);
+
+  function isTruncated(){
+    const el=innerRef.current;
+    if(!el)return false;
+    return el.scrollWidth>el.offsetWidth+1;
+  }
+  function show(){
+    if(!isTruncated())return;
+    if(!ref.current)return;
+    const r=ref.current.getBoundingClientRect();
+    setPos({x:Math.round(r.left+r.width/2),y:Math.round(r.top-8)});
+  }
+  function hide(){setPos(null);}
+
+  // Clone the single child and attach innerRef to it
+  const child=React.Children.only(children);
+  const childWithRef=React.cloneElement(child,{ref:innerRef});
+
   return(
-    <span ref={ref} style={{position:"relative",...style}}
-      onMouseEnter={()=>setVis(true)} onMouseLeave={()=>setVis(false)}
-      onClick={e=>{e.stopPropagation();setVis(v=>!v);}}>
-      {children}
-      {vis&&text&&(
+    <span ref={ref} style={{...style}}
+      onMouseEnter={show} onMouseLeave={hide}
+      onClick={e=>{e.stopPropagation();pos?hide():show();}}>
+      {childWithRef}
+      {pos&&text&&(
         <span style={{
-          position:"absolute",bottom:"calc(100% + 4px)",left:"50%",transform:"translateX(-50%)",
-          background:"#0d1526",border:`1px solid ${T.border}`,borderRadius:3,
-          padding:"4px 8px",fontSize:10,color:T.text,fontFamily:"'Crimson Text',serif",
-          whiteSpace:"nowrap",zIndex:9999,pointerEvents:"none",
-          boxShadow:"0 4px 12px #000a",letterSpacing:0,fontWeight:400
+          position:"fixed",
+          left:pos.x, top:pos.y,
+          transform:"translate(-50%,-100%)",
+          background:"#0d1526",
+          border:"1px solid #1a2d42",
+          borderRadius:3,
+          padding:"4px 10px",
+          fontSize:11,
+          color:"#cdc5b0",
+          fontFamily:"'Crimson Text',serif",
+          whiteSpace:"nowrap",
+          zIndex:99999,
+          pointerEvents:"none",
+          boxShadow:"0 4px 16px #000c",
+          letterSpacing:0,
+          fontWeight:400,
+          lineHeight:1.5,
         }}>{text}</span>
       )}
     </span>
