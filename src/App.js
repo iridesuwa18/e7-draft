@@ -1031,33 +1031,116 @@ function DraftView({data}){
           ))}
         </div>
         {(data.uniqueRoles||[]).length>0&&(
-          <div style={{padding:"2px 12px 4px",display:"flex",gap:4,alignItems:"center",overflowX:"auto"}}>
-            <span style={{fontFamily:"Cinzel,serif",fontSize:8,color:T.dim,letterSpacing:1,marginRight:2,flexShrink:0}}>✦</span>
-            {[{id:"All",name:"All",color:T.sub},...(data.uniqueRoles||[])].map(ur=>(
-              <button key={ur.id} onClick={()=>setFUR(ur.id)} className="hov"
-                style={{background:fUR===ur.id?(ur.id==="All"?T.gold:ur.color):T.card,border:`1px solid ${fUR===ur.id?(ur.id==="All"?T.gold:ur.color):T.border}`,color:fUR===ur.id?(ur.id==="All"?T.bg:"#fff"):T.sub,padding:"2px 8px",borderRadius:2,fontSize:10,fontFamily:"Cinzel,serif",flexShrink:0}}>
-                {ur.name}
-              </button>
-            ))}
+          <div style={{padding:"2px 12px 4px",display:"flex",gap:6,alignItems:"center"}}>
+            <span style={{fontFamily:"Cinzel,serif",fontSize:8,color:T.dim,letterSpacing:1,flexShrink:0}}>✦</span>
+            <URSearchFilter uniqueRoles={data.uniqueRoles} value={fUR} onChange={setFUR}/>
           </div>
         )}
         <div style={{display:"flex",gap:5,padding:"5px 12px 7px",overflowX:"auto",overflowY:"hidden",height:90}}>
           {roster.map(hero=>{
             const heroUR=getHeroUniqueRoles(hero,data.uniqueRoles);
             return(
-              <div key={hero.id} onClick={()=>pick(hero)} className="hov card-hov" style={{flexShrink:0,width:70,background:T.card,border:`1px solid ${T.border}`,borderRadius:4,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,padding:"3px"}}>
-                <Ico src={hero.image} size={34} fallback={clsIcon(hero.class,data.settings)}/>
-                <div style={{fontSize:8,fontFamily:"Cinzel,serif",color:T.text,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%",padding:"0 2px"}}>{hero.name||<span style={{color:T.dim}}>—</span>}</div>
-                <div style={{fontSize:7,color:elColor(hero.element),fontFamily:"Cinzel,serif"}}>{EL_META[hero.element]?.label}</div>
-                {heroUR.length>0&&<div style={{display:"flex",gap:1,flexWrap:"wrap",justifyContent:"center"}}>
-                  {heroUR.map(r=><span key={r.id} style={{fontSize:6,padding:"0 3px",borderRadius:2,background:r.color+"33",color:r.color,lineHeight:"14px"}}>✦{r.name}</span>)}
-                </div>}
-              </div>
+              <HeroPickerCard key={hero.id} hero={hero} heroUR={heroUR} data={data} onPick={pick}/>
             );
           })}
           {roster.length===0&&<div style={{color:T.dim,fontSize:12,fontStyle:"italic",alignSelf:"center",fontFamily:"'Crimson Text',serif",padding:"0 8px"}}>All heroes placed or no heroes match filter.</div>}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Unique Role searchable filter ── */
+function URSearchFilter({uniqueRoles,value,onChange}){
+  const [open,setOpen]=useState(false);
+  const [search,setSearch]=useState("");
+  const ref=useRef();
+  useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
+  const filtered=(uniqueRoles||[]).filter(ur=>!search||(ur.name||"").toLowerCase().includes(search.toLowerCase()));
+  const active=value!=="All"?(uniqueRoles||[]).find(ur=>ur.id===value):null;
+  return(
+    <div ref={ref} style={{position:"relative",minWidth:140}}>
+      <div onClick={()=>setOpen(v=>!v)} className="hov"
+        style={{background:active?active.color+"22":T.card,border:`1px solid ${active?active.color:T.border}`,borderRadius:3,padding:"2px 8px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",minHeight:22}}>
+        {active
+          ?<span style={{fontSize:10,color:active.color,fontFamily:"Cinzel,serif",display:"flex",alignItems:"center",gap:3}}><span>✦</span>{active.name}</span>
+          :<span style={{fontSize:10,color:T.sub,fontFamily:"Cinzel,serif"}}>All Unique Roles</span>
+        }
+        <span style={{color:T.dim,fontSize:9,marginLeft:"auto",flexShrink:0}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&(
+        <div style={{position:"absolute",top:"100%",left:0,zIndex:2000,background:T.panel,border:`1px solid ${T.border}`,borderRadius:3,width:200,maxHeight:200,overflowY:"auto",boxShadow:"0 8px 24px #000a"}}>
+          <div style={{padding:"4px 6px",borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,background:T.panel}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" style={{...INP,fontSize:10}} autoFocus/>
+          </div>
+          <div onClick={()=>{onChange("All");setOpen(false);}} className="hov"
+            style={{padding:"6px 10px",fontSize:10,color:value==="All"?T.gold:T.sub,fontFamily:"Cinzel,serif",background:value==="All"?T.gold+"18":undefined,borderBottom:`1px solid ${T.border}22`,cursor:"pointer"}}>
+            All Unique Roles
+          </div>
+          {filtered.map(ur=>(
+            <div key={ur.id} onClick={()=>{onChange(ur.id);setOpen(false);}} className="hov"
+              style={{padding:"6px 10px",fontSize:10,color:value===ur.id?ur.color:T.sub,fontFamily:"Cinzel,serif",background:value===ur.id?ur.color+"18":undefined,borderBottom:`1px solid ${T.border}22`,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+              <span style={{color:ur.color}}>✦</span>{ur.name}
+              {value===ur.id&&<span style={{marginLeft:"auto",color:ur.color,fontSize:9}}>✓</span>}
+            </div>
+          ))}
+          {filtered.length===0&&<div style={{padding:"8px 10px",fontSize:11,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>No matches</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Hero picker card with unique role popover ── */
+function HeroPickerCard({hero,heroUR,data,onPick}){
+  const [showRoles,setShowRoles]=useState(false);
+  const [roleSearch,setRoleSearch]=useState("");
+  const ref=useRef();
+  useEffect(()=>{
+    if(!showRoles)return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setShowRoles(false);setRoleSearch("");}};
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[showRoles]);
+  const filteredUR=heroUR.filter(r=>!roleSearch||(r.name||"").toLowerCase().includes(roleSearch.toLowerCase()));
+  return(
+    <div ref={ref} style={{position:"relative",flexShrink:0}}>
+      <div onClick={()=>onPick(hero)} className="hov card-hov"
+        style={{width:70,background:T.card,border:`1px solid ${T.border}`,borderRadius:4,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,padding:"3px",cursor:"pointer"}}>
+        <Ico src={hero.image} size={34} fallback={clsIcon(hero.class,data.settings)}/>
+        <div style={{fontSize:8,fontFamily:"Cinzel,serif",color:T.text,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%",padding:"0 2px"}}>{hero.name||<span style={{color:T.dim}}>—</span>}</div>
+        <div style={{fontSize:7,color:elColor(hero.element),fontFamily:"Cinzel,serif"}}>{EL_META[hero.element]?.label}</div>
+        {heroUR.length>0&&(
+          <button
+            onMouseDown={e=>e.stopPropagation()}
+            onClick={e=>{e.stopPropagation();setShowRoles(v=>!v);setRoleSearch("");}}
+            style={{background:showRoles?T.gold+"33":T.border+"66",border:`1px solid ${showRoles?T.gold:T.border}`,borderRadius:2,padding:"0 4px",fontSize:6,color:showRoles?T.gold:T.sub,fontFamily:"Cinzel,serif",cursor:"pointer",lineHeight:"13px",whiteSpace:"nowrap"}}>
+            ✦{heroUR.length}
+          </button>
+        )}
+      </div>
+      {showRoles&&(
+        <div style={{position:"fixed",zIndex:3000,background:T.panel,border:`1px solid ${T.border}`,borderRadius:4,padding:"6px 8px",boxShadow:"0 8px 24px #000c",minWidth:160,maxWidth:220}}
+          onMouseDown={e=>e.stopPropagation()}
+          ref={el=>{
+            if(el&&ref.current){
+              const r=ref.current.getBoundingClientRect();
+              el.style.left=Math.min(r.left,window.innerWidth-230)+"px";
+              el.style.top=(r.top-el.offsetHeight-6)+"px";
+            }
+          }}>
+          <div style={{fontFamily:"Cinzel,serif",fontSize:8,color:T.gold,letterSpacing:1,marginBottom:5}}>{hero.name||"Hero"} · UNIQUE ROLES</div>
+          <input value={roleSearch} onChange={e=>setRoleSearch(e.target.value)} placeholder="Search roles…" style={{...INP,fontSize:10,marginBottom:5}}/>
+          <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:200,overflowY:"auto"}}>
+            {filteredUR.map(r=>(
+              <span key={r.id} style={{fontSize:10,padding:"2px 6px",borderRadius:2,background:r.color+"22",border:`1px solid ${r.color}44`,color:r.color,fontFamily:"'Crimson Text',serif",display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:9}}>✦</span>{r.name}
+              </span>
+            ))}
+            {filteredUR.length===0&&<span style={{fontSize:10,color:T.dim,fontStyle:"italic",fontFamily:"'Crimson Text',serif"}}>No matches</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
