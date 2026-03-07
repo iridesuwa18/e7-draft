@@ -262,8 +262,7 @@ function ImageCropModal({ src, onSave, onClose }) {
   const dispH = natH * scale;
 
   return (
-    <div onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"#000d",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000}}>
+    <div style={{position:"fixed",inset:0,background:"#000d",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10000}}>
       <div style={{background:T.panel,border:`1px solid ${T.border}`,borderRadius:6,padding:"20px 22px",width:340,maxWidth:"96vw"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,paddingBottom:10,borderBottom:`1px solid ${T.border}`}}>
           <span style={{fontFamily:"Cinzel,serif",color:T.gold,fontSize:11,letterSpacing:2}}>CROP IMAGE</span>
@@ -483,7 +482,7 @@ function Ico({src,size=32,fallback="?"}){
 
 function Modal({title,onClose,children,width=580,maxH="88vh"}){
   return(
-    <div onClick={e=>e.target===e.currentTarget&&onClose()} style={{position:"fixed",inset:0,background:"#000c",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}}>
+    <div style={{position:"fixed",inset:0,background:"#000c",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}}>
       <div style={{background:T.panel,border:`1px solid ${T.border}`,borderRadius:6,padding:"20px 22px",width,maxWidth:"96vw",maxHeight:maxH,overflowY:"auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,paddingBottom:10,borderBottom:`1px solid ${T.border}`}}>
           <span style={{fontFamily:"Cinzel,serif",color:T.gold,fontSize:12,letterSpacing:2}}>{title}</span>
@@ -506,6 +505,62 @@ function Field({label,children,half}){
 
 function Pill({active,color=T.gold,onClick,children}){
   return <button onClick={onClick} className="hov" style={{background:active?color+"2a":T.card,border:`1px solid ${active?color:T.border}`,color:active?color:T.sub,padding:"3px 10px",borderRadius:2,fontSize:11,display:"inline-flex",alignItems:"center",gap:4,transition:"all 0.1s",fontFamily:"'Crimson Text',serif"}}>{children}</button>;
+}
+
+/* ═══ COLOUR PALETTE ═══ */
+const PALETTE_KEY = "e7draft_palette";
+const PALETTE_MAX = 16;
+function loadPalette(){ try{ return JSON.parse(localStorage.getItem(PALETTE_KEY)||"[]"); }catch{ return []; } }
+function savePalette(colors){ try{ localStorage.setItem(PALETTE_KEY,JSON.stringify(colors)); }catch{} }
+function addToPalette(color){
+  if(!color||color==="#888888") return;
+  let p=loadPalette().filter(c=>c.toLowerCase()!==color.toLowerCase());
+  p=[color,...p].slice(0,PALETTE_MAX);
+  savePalette(p);
+}
+
+function ColorPicker({value,onChange}){
+  const [palette,setPalette]=useState(()=>loadPalette());
+  const [hovering,setHovering]=useState(null);
+  function pick(color){ onChange(color); }
+  function commit(color){
+    addToPalette(color);
+    setPalette(loadPalette());
+  }
+  function removeFromPalette(color){
+    const p=loadPalette().filter(c=>c.toLowerCase()!==color.toLowerCase());
+    savePalette(p);
+    setPalette(p);
+  }
+  return(
+    <div>
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+        <input type="color" value={value||"#888888"}
+          onChange={e=>pick(e.target.value)}
+          onBlur={e=>commit(e.target.value)}
+          style={{width:36,height:28,border:"none",background:"none",cursor:"pointer",padding:0,flexShrink:0}}/>
+        <input value={value||""} onChange={e=>{pick(e.target.value);}} onBlur={e=>commit(e.target.value)}
+          placeholder="#888888" style={{...INP,width:90,fontSize:12}}/>
+        <span style={{fontSize:13,color:value,fontFamily:"'Crimson Text',serif",minWidth:50}}>■ preview</span>
+      </div>
+      {palette.length>0&&(
+        <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+          {palette.map((c,i)=>(
+            <div key={i} style={{position:"relative",flexShrink:0}}
+              onMouseEnter={()=>setHovering(i)} onMouseLeave={()=>setHovering(null)}>
+              <div onClick={()=>pick(c)} title={c}
+                style={{width:18,height:18,borderRadius:3,background:c,cursor:"pointer",border:`2px solid ${c===value?"#fff":T.border}`,transition:"border-color 0.1s"}}/>
+              {hovering===i&&(
+                <div onClick={()=>removeFromPalette(c)}
+                  style={{position:"absolute",top:-6,right:-6,width:13,height:13,borderRadius:"50%",background:"#3a0e0e",border:`1px solid #c06060`,color:"#c06060",fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",lineHeight:1,zIndex:10}}>×</div>
+              )}
+            </div>
+          ))}
+          <span style={{fontSize:9,color:T.dim,fontFamily:"'Crimson Text',serif",marginLeft:2}}>saved · hover to remove</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Btn({onClick,children,variant="default",style:sx={}}){
@@ -684,8 +739,8 @@ function HeroModal({hero,data,onSave,onClose}){
       })()}
       <SearchDropdown label="BUFFS (can provide)"  items={data.buffs}   sel={f.buffs}     onToggle={v=>tog("buffs",v)}   color="#208888"/>
       <SearchDropdown label="DEBUFFS (can apply)"  items={data.debuffs} sel={f.debuffs}   onToggle={v=>tog("debuffs",v)} color="#a82860"/>
-      <SearchDropdown label="STRENGTHS"  items={data.strengths.map(s=>({...s,color:"#3a7a50"}))}  sel={f.strengths}  onToggle={v=>tog("strengths",v)}  color="#3a7a50"/>
-      <SearchDropdown label="WEAKNESSES" items={data.weaknesses.map(s=>({...s,color:"#7a3030"}))} sel={f.weaknesses} onToggle={v=>tog("weaknesses",v)} color="#7a3030"/>
+      <SearchDropdown label="STRENGTHS"  items={data.strengths.map(s=>({...s,color:s.color||"#3a7a50"}))}  sel={f.strengths}  onToggle={v=>tog("strengths",v)}  color="#3a7a50"/>
+      <SearchDropdown label="WEAKNESSES" items={data.weaknesses.map(s=>({...s,color:s.color||"#7a3030"}))} sel={f.weaknesses} onToggle={v=>tog("weaknesses",v)} color="#7a3030"/>
       <div style={{display:"flex",gap:10,marginTop:6}}>
         <Field label="SYNERGIZES WITH" half>
           <button onClick={()=>setPicker("synergies")} className="hov card-hov" style={{background:T.card,border:`1px solid ${T.border}`,color:T.sub,padding:"6px 10px",borderRadius:3,fontSize:12,width:"100%",textAlign:"left",fontFamily:"'Crimson Text',serif"}}>
@@ -739,7 +794,8 @@ function TagModal({type,tag,data,onSave,onClose}){
     <Modal title={`${tag.id?"Edit":"New"} ${type==="strengths"?"Strength":type==="weaknesses"?"Weakness":type==="buffs"?"Buff":"Debuff"}`} onClose={onClose} width={500}>
       <Field label="NAME"><input value={f.name} onChange={e=>setF(x=>({...x,name:e.target.value}))} placeholder="Tag name…" style={INP} autoFocus/></Field>
       <Field label="ICON / IMAGE"><ImagePicker value={f.icon} onChange={v=>setF(x=>({...x,icon:v}))} allImages={allImages}/></Field>
-      {!isStrWk&&<Field label="COLOR"><div style={{display:"flex",gap:8,alignItems:"center"}}><input type="color" value={f.color||"#888888"} onChange={e=>setF(x=>({...x,color:e.target.value}))} style={{width:36,height:28,border:"none",background:"none",cursor:"pointer",padding:0}}/><span style={{fontSize:13,color:f.color,fontFamily:"'Crimson Text',serif"}}>{f.name||"preview"}</span></div></Field>}
+      {!isStrWk&&<Field label="COLOR"><ColorPicker value={f.color||"#888888"} onChange={v=>setF(x=>({...x,color:v}))}/></Field>}
+      {isStrWk&&<Field label="TEXT COLOR"><ColorPicker value={f.color||"#888888"} onChange={v=>setF(x=>({...x,color:v}))}/></Field>}
       {isStrWk&&(
         <>
           <div style={{fontSize:12,color:T.sub,marginBottom:10,fontFamily:"'Crimson Text',serif",lineHeight:1.7,background:T.card,border:`1px solid ${T.border}`,borderRadius:3,padding:"8px 10px"}}>
@@ -1117,7 +1173,7 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
             <div key={`t${i}`} className={highlighted?"hl":""} style={{display:"flex",flexDirection:"column",gap:2,borderRadius:2,padding:"2px 2px",transition:"all 0.2s"}}>
               <div style={{display:"flex",alignItems:"center",gap:3}}>
                 <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
-                <span style={{fontSize:9,color:highlighted?HIGHLIGHT:"#5aaa70",fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400}}>{tag.name}</span>
+                <span style={{fontSize:9,color:highlighted?HIGHLIGHT:(tag.color||"#5aaa70"),fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400}}>{tag.name}</span>
                 {highlighted&&<span style={{fontSize:9,color:HIGHLIGHT,flexShrink:0}}>★</span>}
               </div>
               {roleHeroes&&roleHeroes.length>0&&(
@@ -1148,7 +1204,7 @@ function TeamPanel({label,team,teamKey,opp,active,setActive,onRemove,data}){
             <div key={`t${i}`} className={highlighted?"hl":""} style={{display:"flex",flexDirection:"column",gap:2,borderRadius:2,padding:"2px 2px",transition:"all 0.2s"}}>
               <div style={{display:"flex",alignItems:"center",gap:3}}>
                 <Ico src={tag.icon} size={12} fallback={tag.name?.[0]||"?"}/>
-                <span style={{fontSize:9,color:highlighted?HIGHLIGHT:"#a06060",fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400}}>{tag.name}</span>
+                <span style={{fontSize:9,color:highlighted?HIGHLIGHT:(tag.color||"#a06060"),fontFamily:"'Crimson Text',serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:highlighted?700:400}}>{tag.name}</span>
                 {highlighted&&<span style={{fontSize:9,color:HIGHLIGHT,flexShrink:0}}>⚠</span>}
               </div>
               {roleHeroes&&roleHeroes.length>0&&(
@@ -1287,10 +1343,7 @@ function UniqueRoleModal({ur,data,onSave,onClose}){
       <div style={{display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
         <div style={{flex:1}}><Field label="NAME"><input value={f.name} onChange={e=>setF(x=>({...x,name:e.target.value}))} placeholder="Unique role name…" style={INP} autoFocus/></Field></div>
         <Field label="COLOR">
-          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
-            <input type="color" value={f.color||"#888888"} onChange={e=>setF(x=>({...x,color:e.target.value}))} style={{width:36,height:28,border:"none",background:"none",cursor:"pointer",padding:0}}/>
-            <span style={{fontSize:12,color:f.color,fontFamily:"'Crimson Text',serif",display:"flex",alignItems:"center",gap:3}}><span>✦</span>{f.name||"preview"}</span>
-          </div>
+          <ColorPicker value={f.color||"#888888"} onChange={v=>setF(x=>({...x,color:v}))}/>
         </Field>
       </div>
       <Field label="MATCH MODE">
@@ -1390,10 +1443,7 @@ function TagsView({data,onUpdate}){
         {roleEdit&&(
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:4,padding:"10px 12px",marginTop:8,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <input value={roleEdit.name} onChange={e=>setRoleEdit(r=>({...r,name:e.target.value}))} placeholder="Role name…" style={{...INP,width:160}} autoFocus/>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <input type="color" value={roleEdit.color||"#888888"} onChange={e=>setRoleEdit(r=>({...r,color:e.target.value}))} style={{width:32,height:28,border:"none",background:"none",cursor:"pointer",padding:0}}/>
-              <span style={{fontSize:12,color:roleEdit.color,fontFamily:"'Crimson Text',serif"}}>{roleEdit.name||"preview"}</span>
-            </div>
+            <ColorPicker value={roleEdit.color||"#888888"} onChange={v=>setRoleEdit(r=>({...r,color:v}))}/>
             <div style={{display:"flex",gap:6,marginLeft:"auto"}}>
               <Btn onClick={()=>setRoleEdit(null)}>Cancel</Btn>
               <Btn variant="primary" onClick={()=>roleEdit.name.trim()&&saveRole(roleEdit)}>Save</Btn>
