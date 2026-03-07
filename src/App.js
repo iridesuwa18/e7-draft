@@ -1646,6 +1646,15 @@ export default function App(){
         {tab==="tags"     &&<TagsView     data={data} onUpdate={update}/>}
         {tab==="settings" &&<SettingsView data={data} onUpdate={update} onImport={d=>{setData(d);save(d);setTab("heroes");}}/>}
       </main>
+
+      <footer style={{background:T.panel,borderTop:`1px solid ${T.border}`,padding:"8px 16px",flexShrink:0,textAlign:"center"}}>
+        <p style={{fontFamily:"'Crimson Text',serif",fontSize:11,color:T.dim,lineHeight:1.7,margin:0}}>
+          Credits to <a href="https://ceciliabot.github.io/#/" target="_blank" rel="noopener noreferrer" style={{color:T.sub,textDecoration:"underline"}}>ceciliabot</a> for all information, icons and data on EpicSeven.
+          Additional icons are from <a href="https://icons8.com" target="_blank" rel="noopener noreferrer" style={{color:T.sub,textDecoration:"underline"}}>icons8.com</a>.<br/>
+          Made with the help of <a href="https://claude.ai" target="_blank" rel="noopener noreferrer" style={{color:T.sub,textDecoration:"underline"}}>Claude AI</a>. &nbsp;·&nbsp;
+          I am <span style={{color:T.sub}}>iridesuwa</span> — zero coding experience, purely a passion project. 🩵
+        </p>
+      </footer>
     </div>
   );
 }
